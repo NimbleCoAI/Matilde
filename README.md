@@ -70,6 +70,31 @@ result = verify_reference(ref)
 print(result.verdict, result.score)   # -> e.g. "verified" 1.0
 ```
 
+### Command line — verify a whole bibliography
+
+```bash
+python3 -m engine.cli refs.bib                  # verify a BibTeX file
+python3 -m engine.cli dois.txt                  # or a list of DOIs (one per line)
+python3 -m engine.cli --doi 10.1038/171737a0    # or a single DOI
+python3 -m engine.cli refs.bib --json           # machine-readable
+```
+
+Output for a mixed bibliography:
+
+```
+Verified 3 reference(s):
+  [OK ] verified      0.9  Molecular structure of nucleic acids
+  [RET] retracted     0.1  Ileal-lymphoid-nodular hyperplasia
+  [XX ] not_found     0.1  A Totally Fabricated Paper
+
+not_found=1  retracted=1  verified=1
+```
+
+Exit code is non-zero if any reference is `not_found` or `retracted` — so you can
+drop it into CI or a pre-commit hook on a manuscript's `.bib`.
+
+### Tests
+
 ```bash
 python3 -m pytest tests/ --ignore=tests/test_citations_integration.py   # offline unit suite
 MATILDE_LIVE=1 python3 -m pytest tests/test_citations_integration.py    # live API checks
