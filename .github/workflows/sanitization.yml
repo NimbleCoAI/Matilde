@@ -1,0 +1,39 @@
+name: sanitization
+
+# The commons gate. Runs on every PR. Scans ONLY the diff (fast, never
+# flaky-blocks a contributor on unrelated pre-existing content) — the full-tree
+# audit belongs in a scheduled/gardener lane, not per-PR.
+#
+# SECURITY NOTE for when you open this to untrusted forks: switch the trigger to
+# `pull_request_target` and check out the PR head explicitly, so the build-time
+# ANTHROPIC_API_KEY is never exposed to injected PR code. Until then, keep
+# `pull_request` (key only runs on trusted branches).
+
+on:
+  pull_request:
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install semantic-layer dep
+        run: pip install anthropic
+
+      - name: Scanner self-tests (deterministic, no key needed)
+        run: python -m pytest tests/test_check_sanitization.py -q
+
+      - name: Sanitization gate (diff)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          git diff --name-only "$BASE...HEAD" \
+            | xargs -r python scripts/check_sanitization.py

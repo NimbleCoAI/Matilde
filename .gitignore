@@ -1,0 +1,37 @@
+# ─── Instance overlay — private by construction ───────────────────────────
+# Anything an operator drops here stays on their machine / data volume and is
+# NEVER committed to the shared package. This is the structural half of the
+# privacy model (the sanitization gate is the other half). See
+# docs/privacy-and-visibility.md.
+
+# Per-engagement working data (rename "engagements/" to your domain — e.g.
+# investigations/, clients/, campaigns/ — and keep it ignored).
+engagements/*
+!engagements/.gitkeep
+!engagements/README.md
+
+# Operator overlay: instance-specific skills, souls, config, API keys.
+instance/
+.overlay/
+*.local.*
+.env
+.env.*
+!.env.example
+
+# Secrets that should never reach git regardless of location.
+*.pem
+*_rsa
+*.key
+config.local.yaml
+
+# ─── Standard noise ───────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+.DS_Store
+*.db
+dist/
+build/
