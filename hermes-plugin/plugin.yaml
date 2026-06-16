@@ -1,53 +1,24 @@
-# plugin.yaml — Hermes plugin manifest for {{package}}
+# plugin.yaml — Hermes plugin manifest for Matilde (verifiable citations)
 #
-# This file is read by the Hermes plugin loader before __init__.py is
-# imported. Fields marked REQUIRED must be set. Fields marked OPTIONAL
-# can be omitted; defaults are noted inline.
-#
-# After filling in this file, register the plugin by adding a symlink:
-#   ~/.hermes-{agent-name}/plugins/{{package}} -> /path/to/{{package}}/hermes-plugin/
-# Then restart the agent (or run `hermes plugin reload` if supported).
+# Register the plugin by symlinking it into the agent's plugin dir:
+#   ~/.hermes-{agent-name}/plugins/matilde -> /path/to/Matilde/hermes-plugin/
+# Then restart the agent (or `hermes plugin reload` if supported).
 
-# REQUIRED — short slug identifying this plugin. Must be unique across all
-# plugins loaded by the agent. Use lowercase, hyphens allowed, no spaces.
-# Convention: match your package directory name.
-name: "{{package}}"
+name: "matilde"
 
-# REQUIRED — semantic version. Bump the minor version when you add tools;
-# bump the patch version for fixes; bump the major version for breaking changes
-# to existing tool schemas.
 version: "0.1.0"
 
-# REQUIRED — one-sentence summary shown in `hermes plugin list` output.
-# Be specific: what domain does this plugin operate in and what can it do?
-description: "{{Package}} — {{one-sentence description of what this plugin enables the agent to do}}."
+description: "Matilde — verifiable academic citations: existence, metadata-match, retraction, and URL-liveness checking against Crossref, OpenAlex, and DataCite."
 
-# OPTIONAL — who maintains this plugin. Free-form; shown in listings.
-author: "{{Your Name or Org}}"
+author: "NimbleCoAI"
 
-# OPTIONAL — deployment model. "standalone" means this plugin runs as a
-# library within the agent process. "sidecar" means the plugin communicates
-# with a separate process via a local socket or HTTP. Most use-case packages
-# are "standalone".
 kind: standalone
 
-# OPTIONAL — list of environment variable names that must be set for this
-# plugin's tools to function. The Hermes loader will warn (but not fail) at
-# startup if any are missing; the _check_available() gate in tools.py is
-# responsible for the hard fail at invocation time.
-#
-# List only variables that are genuinely required. If your package works
-# without any API keys (e.g. it only reads local files), omit this field.
-requires_env:
-  - "{{YOUR_API_KEY}}"
-  # - "{{YOUR_SECONDARY_KEY}}"   # add more if needed
+# No credentials required — Crossref, OpenAlex, and DataCite are free and
+# unauthenticated. MATILDE_CONTACT_EMAIL is optional (joins providers' polite
+# pools) and is therefore NOT listed as required env.
 
-# OPTIONAL — explicit list of tool names this plugin registers. Used by
-# toolset management and conflict detection. Must match the tool_name values
-# in __init__.py's _TOOLS tuple exactly.
-#
-# Keep this in sync with _TOOLS as you add or remove tools.
 provides_tools:
-  - "{{package}}_example"
-  # - "{{package}}_run"
-  # - "{{package}}_status"
+  - "matilde_verify_citation"
+  - "matilde_verify_bibliography"
+  - "matilde_check_retraction"

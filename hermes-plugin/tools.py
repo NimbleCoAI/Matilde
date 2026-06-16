@@ -1,29 +1,17 @@
-"""{{package}} tools for Hermes — schemas, handlers, and the availability gate.
+"""Matilde tools for Hermes — verifiable-citation checking.
 
-This file is loaded by __init__.py via importlib so it works under any
-import path Hermes assigns to the plugin. It must be importable with no
-external dependencies beyond the stdlib and whatever your package library
-provides.
+These tools expose the ``engine.citations`` verifier to the agent. A citation is
+checked along four axes (existence, metadata-match, retraction, URL-liveness) and
+scored. This is *verifiable*, not *provably correct* — the score is a confidence,
+not a proof. Claim-support grounding (does the cited passage back the claim?) is a
+v2 axis and is not wired here.
 
-INSTANTIATION GUIDE
--------------------
-1. Fill in _check_available() to test that your library / API creds / data
-   store are actually reachable. Return True to allow invocation, False to
-   block it with a clear error message surfaced by Hermes.
+No API key is required: Crossref, OpenAlex, and DataCite are all free and
+unauthenticated. Set ``MATILDE_CONTACT_EMAIL`` to join the providers' polite
+pools (recommended, not required).
 
-2. Copy the EXAMPLE_SCHEMA + _handle_example block as many times as you need
-   real tools. Rename every occurrence of "example" and "EXAMPLE".
-
-3. Export each new schema and handler from this module — __init__.py imports
-   them by name. Add a line for each to the import block in __init__.py and
-   a row to _TOOLS.
-
-4. Delete the example tool (schema, handler, and its _TOOLS row) once you
-   have at least one real tool working end-to-end.
-
-No classes required. Keep handlers as plain functions: (args: dict, **kwargs)
--> str (a JSON string). The _tool_result / _tool_error helpers standardise
-the envelope.
+Handlers are plain functions ``(args: dict, **kwargs) -> str`` returning a JSON
+string built by ``_tool_result`` / ``_tool_error``. They never raise.
 """
 
 from __future__ import annotations
@@ -34,28 +22,19 @@ import sys
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# Path setup
+# Path setup — make the package root importable (engine/ lives one level up).
 # ---------------------------------------------------------------------------
-# Mirrors the path insert in __init__.py so this file is also independently
-# importable (e.g. in unit tests that import tools.py directly).
 _PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 _PACKAGE_ROOT = os.path.normpath(os.path.join(_PLUGIN_DIR, ".."))
 if _PACKAGE_ROOT not in sys.path:
     sys.path.insert(0, _PACKAGE_ROOT)
 
+
 # ---------------------------------------------------------------------------
-# Shared helpers
+# Shared envelope helpers
 # ---------------------------------------------------------------------------
 
 def _tool_result(data: Any = None, **kwargs: Any) -> str:
-    """Return a JSON success envelope.
-
-    Pass either a single dict as `data`, or keyword arguments that become
-    the top-level keys. `success: true` is always injected.
-
-        _tool_result({"count": 3, "items": [...]})
-        _tool_result(count=3, items=[...])
-    """
     if data is not None:
         payload = data if isinstance(data, dict) else {"result": data}
     else:
@@ -65,15 +44,7 @@ def _tool_result(data: Any = None, **kwargs: Any) -> str:
 
 
 def _tool_error(message: str, **extra: Any) -> str:
-    """Return a JSON error envelope.
-
-    The `error` key carries the human-readable message. `success: false` is
-    always set. Pass extra keyword arguments for structured debugging info.
-
-        _tool_error("API key missing", hint="set {{YOUR_API_KEY}} in .env")
-    """
-    payload = {"error": message, "success": False, **extra}
-    return json.dumps(payload, default=str)
+    return json.dumps({"error": message, "success": False, **extra}, default=str)
 
 
 # ---------------------------------------------------------------------------
@@ -81,186 +52,207 @@ def _tool_error(message: str, **extra: Any) -> str:
 # ---------------------------------------------------------------------------
 
 def _check_available() -> bool:
-    """Return True if this plugin's tools are ready to run.
+    """Matilde's citation tools need no credentials — only that the engine imports.
 
-    Called by Hermes before every tool invocation. If this returns False,
-    Hermes surfaces an error to the agent without calling the handler.
-
-    WHAT TO CHECK HERE:
-    - Can the library be imported? (try/except ImportError)
-    - Are required env vars set? (os.environ.get)
-    - Is a required local file or database present? (os.path.exists)
-    - Can a lightweight connectivity check pass? (optional — only if cheap)
-
-    Keep this fast. Do NOT open connections or read large files; just verify
-    prerequisites exist. Actual errors inside handlers are reported via
-    _tool_error, not this gate.
-
-    EXAMPLE — check that your library is importable AND a required env var is set:
-
-        def _check_available() -> bool:
-            try:
-                import {{package_lib}}          # noqa: F401
-            except ImportError:
-                return False
-            if not os.environ.get("{{YOUR_API_KEY}}"):
-                return False
-            return True
+    The provider APIs (Crossref/OpenAlex/DataCite) are free and unauthenticated,
+    so the only real prerequisite is that the engine module loads.
     """
-    # TODO: replace the body below with your real availability check.
     try:
-        # Replace with: `import {{package_lib}}`
-        # If your package has no importable library (e.g. it only calls an
-        # external API), just check for the required env var instead.
-        _api_key = os.environ.get("{{YOUR_API_KEY}}")
-        if not _api_key:
-            return False
+        import engine.citations  # noqa: F401
         return True
     except Exception:
         return False
 
 
 # ---------------------------------------------------------------------------
-# Example tool
+# Argument coercion
 # ---------------------------------------------------------------------------
-# This is the minimum viable tool: one schema, one handler.
-# Copy this block to add a real tool, then delete the example.
 
-EXAMPLE_SCHEMA = {
-    # Must match the tool_name in __init__.py's _TOOLS tuple exactly.
-    "name": "{{package}}_example",
+def _reference_from_args(d: dict) -> Any:
+    from engine.citations import Reference
+    authors = d.get("authors") or []
+    if isinstance(authors, str):
+        # accept "Vaswani; Shazeer" or "Vaswani, Shazeer"
+        sep = ";" if ";" in authors else ","
+        authors = [a.strip() for a in authors.split(sep) if a.strip()]
+    year = d.get("year")
+    try:
+        year = int(year) if year not in (None, "") else None
+    except (TypeError, ValueError):
+        year = None
+    return Reference(
+        raw=str(d.get("raw", "")),
+        title=str(d.get("title", "")).strip(),
+        authors=list(authors),
+        year=year,
+        doi=str(d.get("doi", "")).strip(),
+        venue=str(d.get("venue", "")).strip(),
+        url=str(d.get("url", "")).strip(),
+    )
 
-    # Shown to the agent in the tool listing. Be specific: what does this
-    # tool do, what does it return, when should the agent call it?
+
+# ---------------------------------------------------------------------------
+# Tool: verify a single citation
+# ---------------------------------------------------------------------------
+
+VERIFY_CITATION_SCHEMA = {
+    "name": "matilde_verify_citation",
     "description": (
-        "Example tool for the {{package}} package. "
-        "Replace this description with what your tool actually does. "
-        "Include what the agent should pass as input and what it gets back."
+        "Verify a single academic citation along four axes — existence (does the "
+        "work exist, via Crossref/OpenAlex/DataCite), metadata-match (do title/"
+        "authors/year agree), retraction (Retraction Watch via Crossref/OpenAlex), "
+        "and URL-liveness — and return a composite verifiability score (0-1) plus a "
+        "verdict: verified | warnings | retracted | not_found | unverifiable. "
+        "Provide as many fields as you have; a DOI gives the most reliable result. "
+        "Use this before trusting any reference an LLM produced — hallucinated "
+        "references are common."
     ),
-
-    # JSON Schema for the tool's input arguments.
-    # Hermes validates incoming args against this before calling the handler.
     "parameters": {
         "type": "object",
         "properties": {
-            # REPLACE: define the real parameters your tool needs.
-            # Each key becomes an args["key"] in the handler.
-            "query": {
-                "type": "string",
-                "description": (
-                    "The input query or identifier this tool operates on. "
-                    "Replace with a parameter name and description appropriate "
-                    "for your domain (e.g. 'subject', 'target_id', 'url')."
-                ),
-            },
-            "options": {
-                "type": "object",
-                "description": (
-                    "Optional dict of extra parameters. Replace or remove once "
-                    "you know your tool's real parameter surface."
-                ),
-            },
+            "doi": {"type": "string", "description": "DOI (bare, or as a doi.org URL). Most reliable signal."},
+            "title": {"type": "string", "description": "Paper title. Used for existence search when no DOI, and always for metadata-match."},
+            "authors": {"type": "array", "items": {"type": "string"}, "description": "Author names or surnames (e.g. ['Vaswani', 'Shazeer'])."},
+            "year": {"type": "integer", "description": "Publication year."},
+            "venue": {"type": "string", "description": "Journal/conference (optional)."},
+            "url": {"type": "string", "description": "A URL for the work, if cited. Checked for liveness with a Wayback fallback."},
         },
-        # List the parameter names the handler cannot function without.
-        "required": ["query"],
+        "required": [],
     },
 }
 
 
-def _handle_example(args: dict[str, Any], **kwargs: Any) -> str:
-    """Handle a call to {{package}}_example.
-
-    Hermes calls this function after _check_available() returns True.
-
-    Args:
-        args:    Validated input dict matching EXAMPLE_SCHEMA["parameters"].
-        **kwargs: Reserved for future Hermes context keys (e.g. session_id).
-                 Always accept **kwargs even if you don't use them.
-
-    Returns:
-        A JSON string produced by _tool_result() or _tool_error().
-        Never raise — catch all exceptions and return _tool_error(...).
-
-    HANDLER PATTERN:
-        1. Extract and validate inputs from args (required fields first).
-        2. Call your library / API / local engine.
-        3. Shape the response into a dict and return _tool_result(...).
-        4. Wrap the body in a try/except and return _tool_error on failure.
-
-    EXAMPLE — calling a hypothetical library function:
-
-        from {{package_lib}} import run_query, QueryError
-
-        query = args.get("query", "").strip()
-        if not query:
-            return _tool_error("'query' must not be empty.")
-
-        try:
-            result = run_query(query, **args.get("options", {}))
-        except QueryError as exc:
-            return _tool_error(f"Query failed: {exc}")
-
-        return _tool_result(
-            query=query,
-            result_count=len(result.items),
-            items=result.items,
-            message=f"Found {len(result.items)} results for '{query}'.",
-        )
-    """
-    # --- Input extraction ---
-    query = args.get("query", "").strip()
-    if not query:
-        return _tool_error("'query' must not be empty.")
-
-    options = args.get("options") or {}
-
-    # --- TODO: replace the stub below with your real implementation ---
+def _handle_verify_citation(args: dict, **kwargs: Any) -> str:
+    if not (args.get("doi") or args.get("title")):
+        return _tool_error("Provide at least a 'doi' or a 'title' to verify.")
     try:
-        # Placeholder: echo the query back with a stub result.
-        # Delete this block and call your actual library here.
-        stub_result = {
-            "query": query,
-            "options": options,
-            "items": [],
-            "note": (
-                "This is the example stub. Replace _handle_example with a "
-                "real implementation that calls your {{package}} library."
-            ),
-        }
-        return _tool_result(stub_result)
-
-    except Exception as exc:
-        # Catch-all: surface unexpected errors as tool errors rather than
-        # letting them propagate and crash the Hermes tool dispatch loop.
-        return _tool_error(
-            f"{{package}}_example failed: {type(exc).__name__}: {exc}",
-            query=query,
+        from engine.citations import verify_reference
+        ref = _reference_from_args(args)
+        result = verify_reference(ref)
+        out = result.to_dict()
+        return _tool_result(
+            verdict=result.verdict,
+            score=result.score,
+            axes={
+                "existence": result.existence.status,
+                "metadata_match": result.metadata_match.status,
+                "retraction": result.retraction.status,
+                "url_liveness": result.url_liveness.status,
+            },
+            detail=out,
+            message=f"Citation verdict: {result.verdict} (score {result.score}).",
         )
+    except Exception as exc:  # never raise out of a handler
+        return _tool_error(f"verify_citation failed: {type(exc).__name__}: {exc}")
 
 
 # ---------------------------------------------------------------------------
-# Add your real tools below this line
+# Tool: verify a whole bibliography
 # ---------------------------------------------------------------------------
-# Template for each additional tool:
-#
-# YOUR_TOOL_SCHEMA = {
-#     "name": "{{package}}_<verb>",
-#     "description": "...",
-#     "parameters": {
-#         "type": "object",
-#         "properties": {
-#             "<param>": {"type": "string", "description": "..."},
-#         },
-#         "required": ["<param>"],
-#     },
-# }
-#
-# def _handle_<verb>(args: dict[str, Any], **kwargs: Any) -> str:
-#     <param> = args.get("<param>", "")
-#     if not <param>:
-#         return _tool_error("'<param>' is required.")
-#     try:
-#         result = your_library_call(<param>)
-#         return _tool_result(result=result)
-#     except Exception as exc:
-#         return _tool_error(f"<verb> failed: {exc}")
+
+VERIFY_BIBLIOGRAPHY_SCHEMA = {
+    "name": "matilde_verify_bibliography",
+    "description": (
+        "Verify a list of citations at once and return per-reference verdicts plus "
+        "a summary (counts by verdict, and the indices of any not_found or retracted "
+        "references — the ones that most need attention). Use this to audit a "
+        "reference list or bibliography in bulk."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "references": {
+                "type": "array",
+                "description": "List of citation objects, each with any of: doi, title, authors, year, venue, url.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "doi": {"type": "string"},
+                        "title": {"type": "string"},
+                        "authors": {"type": "array", "items": {"type": "string"}},
+                        "year": {"type": "integer"},
+                        "venue": {"type": "string"},
+                        "url": {"type": "string"},
+                    },
+                },
+            },
+        },
+        "required": ["references"],
+    },
+}
+
+
+def _handle_verify_bibliography(args: dict, **kwargs: Any) -> str:
+    refs = args.get("references")
+    if not isinstance(refs, list) or not refs:
+        return _tool_error("'references' must be a non-empty list of citation objects.")
+    try:
+        from engine.citations import verify_reference
+        results, summary = [], {}
+        flagged = []
+        for i, item in enumerate(refs):
+            if not isinstance(item, dict):
+                results.append({"index": i, "error": "not an object"})
+                continue
+            ref = _reference_from_args(item)
+            r = verify_reference(ref)
+            summary[r.verdict] = summary.get(r.verdict, 0) + 1
+            if r.verdict in ("not_found", "retracted"):
+                flagged.append({"index": i, "verdict": r.verdict,
+                                "title": ref.title or ref.doi or ref.raw})
+            results.append({
+                "index": i, "verdict": r.verdict, "score": r.score,
+                "title": ref.title or ref.doi, "detail": r.to_dict(),
+            })
+        return _tool_result(
+            count=len(refs),
+            summary=summary,
+            needs_attention=flagged,
+            results=results,
+            message=(f"Verified {len(refs)} references: " +
+                     ", ".join(f"{k}={v}" for k, v in sorted(summary.items())) +
+                     (f". {len(flagged)} need attention." if flagged else ".")),
+        )
+    except Exception as exc:
+        return _tool_error(f"verify_bibliography failed: {type(exc).__name__}: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Tool: quick retraction check
+# ---------------------------------------------------------------------------
+
+CHECK_RETRACTION_SCHEMA = {
+    "name": "matilde_check_retraction",
+    "description": (
+        "Quickly check whether a work (by DOI) has been retracted, using Crossref's "
+        "Retraction Watch data. Returns status 'pass' (not retracted), 'fail' "
+        "(RETRACTED), or 'unknown' (DOI not found / no DOI). Faster than a full "
+        "verification when you only care about retraction status."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "doi": {"type": "string", "description": "DOI to check (bare or doi.org URL)."},
+        },
+        "required": ["doi"],
+    },
+}
+
+
+def _handle_check_retraction(args: dict, **kwargs: Any) -> str:
+    doi = str(args.get("doi", "")).strip()
+    if not doi:
+        return _tool_error("'doi' is required.")
+    try:
+        from engine.citations import check_retraction, default_fetch
+        res = check_retraction(doi, fetch=default_fetch)
+        return _tool_result(
+            doi=doi,
+            status=res.status,
+            retracted=(res.status == "fail"),
+            detail=res.detail,
+            evidence=res.evidence,
+            message=res.detail,
+        )
+    except Exception as exc:
+        return _tool_error(f"check_retraction failed: {type(exc).__name__}: {exc}")

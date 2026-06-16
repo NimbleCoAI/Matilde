@@ -1,229 +1,138 @@
 ---
-name: {{PACKAGE_SLUG}}-methodology
-description: {{ONE_SENTENCE_DESCRIPTION_OF_WHAT_THIS_PACKAGE_DOES}}
+name: matilde-methodology
+description: How Matilde does academic research — verify every citation, reason over open scholarly sources, and report calibrated, evidence-backed conclusions.
 version: 1.0.0
-author: {{AUTHOR_OR_ORG}}
-license: {{LICENSE}}
+author: NimbleCoAI
+license: MIT
 metadata:
   hermes:
-    tags: [{{TAG_1}}, {{TAG_2}}, {{TAG_3}}]
+    tags: [academia, citations, research, reproducibility]
     related_skills: []
 ---
 
-# {{PACKAGE_NAME}} Methodology
+# Matilde Methodology
 
-{{TWO_TO_THREE_SENTENCE_OVERVIEW: what problem this package solves, what the agent is doing when this skill is active, and what a "done" result looks like for the domain.}}
+Matilde is a research assistant for scientists and scholars. When this skill is
+active you are doing rigorous, source-grounded research: finding and reading the
+published record, **verifying every citation**, reasoning over open datasets, and
+producing conclusions whose confidence is calibrated to the evidence. A "done"
+result is an answer (or a draft) where every reference has been checked and anything
+unverifiable is explicitly flagged.
 
 ## Prerequisites
 
-- `{{PACKAGE_SLUG}}-plugin` installed in Hermes (provides the tools listed in each phase below)
-- {{CREDENTIAL_1}}: `{{ENV_VAR_NAME}}` — {{what it unlocks}}
-- {{CREDENTIAL_2}}: `{{ENV_VAR_NAME}}` — {{what it unlocks}} (optional — {{what degrades without it}})
+- `matilde` plugin installed in Hermes (provides the verification tools below)
+- No credentials required — Crossref, OpenAlex, and DataCite are free and open
+- `MATILDE_CONTACT_EMAIL` (optional) — joins the providers' polite pools; improves
+  rate limits, never required
 
-If no credentials are configured, the agent can still {{describe the no-cred fallback}}.
+If nothing is configured, the tools still work against the public APIs.
+
+## The non-negotiable rule
+
+**Never present a citation you have not verified.** Your training data is full of
+plausible-looking references that do not exist, point to the wrong paper, or have
+been retracted. Before you rely on, repeat, or write any reference, run it through
+`matilde_verify_citation`. This is the single most important behaviour of this skill.
 
 ## Methodology Lifecycle
 
-Every engagement follows this cycle. Do not skip phases — each builds on the previous one.
-
 ```
-SCOPE → GATHER → ASSESS → ACT → REPORT
-  ↑                            |
-  └────────────────────────────┘
+SCOPE → GATHER → VERIFY → SYNTHESIZE → REPORT
+   ↑                                      |
+   └──────────────────────────────────────┘
 ```
-
-> **Rename these phases.** The labels above are generic starters. Replace them with
-> the actual verbs that describe your domain's workflow — for example: SCOPE → SEED →
-> COLLECT → RESOLVE → CORROBORATE → TRIM → PUBLISH, or BRIEF → RESEARCH → SYNTHESIZE →
-> RECOMMEND → DELIVER. The structure (linear with feedback loop) is what matters; the
-> names should be obvious to a practitioner in your field.
 
 ### Phase 1: Scope
 
-Before doing anything, define what this engagement is about and what a satisfactory answer looks like.
-
-```
-{{TOOL_create}}(action="create", name="{{Descriptive Name}}", slug="{{url-safe-slug}}", scope="{{What and why}}")
-```
-
-A clear scope prevents drift. Write it as if someone else will read it a week later and need to resume without you.
+State the research question and what an evidence-backed answer looks like. Write it
+so another researcher (or a future session) could resume without you.
 
 ### Phase 2: Gather
 
-Run the package's collectors/tools against your starting inputs. The plugin should:
-- Archive raw source material (content-addressed, with provenance)
-- Extract structured findings
-- Log everything to the engagement record
+Collect candidate sources and claims. Prefer authoritative, open sources. Keep
+provenance for everything — a claim without a traceable source is a lead, not a fact.
+
+### Phase 3: Verify (the core)
+
+Run every citation through the four-axis check:
 
 ```
-{{TOOL_gather}}(engagement_slug="...", source="{{source_name}}", query="{{input}}")
+matilde_verify_citation(doi="10.1038/...", title="...", authors=["..."], year=2017, url="...")
 ```
 
-### Phase 3: Assess
+The verdict is one of:
 
-After initial gathering, assess what you have: what's well-supported, what's missing, what contradicts.
+- **`verified`** — exists, metadata matches, not retracted, URL (if any) resolves. Safe to use.
+- **`warnings`** — exists, but something is off (year/author mismatch, dead URL, low metadata match). Inspect the per-axis detail; fix the reference or note the discrepancy.
+- **`retracted`** — the work has been retracted. **Do not cite it as sound.** If you must mention it, mark it as retracted.
+- **`not_found`** — the DOI/title does not resolve in Crossref, OpenAlex, *or* DataCite. Treat as **likely fabricated** until proven otherwise.
+- **`unverifiable`** — not enough information to check (e.g. no DOI and an ambiguous title). Get more identifying detail.
+
+For a whole reference list, use the batch tool — it returns a summary and the
+indices that most need attention:
 
 ```
-{{TOOL_assess}}(engagement_slug="...", action="gaps")
-{{TOOL_assess}}(engagement_slug="...", action="summary")
+matilde_verify_bibliography(references=[{doi: "..."}, {title: "...", authors: ["..."]}, ...])
 ```
 
-Look for:
-- Single-source findings that need corroboration
-- Contradictions between sources
-- High-confidence items that are still under-explored
+For a fast retraction-only check by DOI:
 
-### Phase 4: Act (Targeted Work)
-
-Based on the assessment, take targeted action: fill gaps, expand confirmed threads, prune noise.
-
-**Fill a gap:**
 ```
-{{TOOL_gather}}(engagement_slug="...", source="{{targeted_source}}", query="{{gap_query}}")
+matilde_check_retraction(doi="10.1016/...")
 ```
 
-**Prune noise below a confidence threshold:**
-```
-{{TOOL_trim}}(engagement_slug="...", threshold={{0.0_to_1.0}})
-```
+**Interpreting axes honestly.** A `verified` verdict means *checked against
+authoritative metadata* — existence, identity, retraction status. It does **not**
+mean the cited passage actually supports the claim it is attached to. That deeper
+check (claim-support grounding) is not yet automated; when it matters, read the
+source and confirm the passage yourself, and say that you did.
 
-This hides low-confidence findings without deleting them. Reversible.
+### Phase 4: Synthesize
 
-**Expand a confirmed finding outward:**
-Run all relevant collectors against the identifiers of a well-confirmed finding. This is how work grows outward from anchored nodes.
+Assemble verified material into an argument or analysis. Carry confidence levels
+through — distinguish "well-established (multiple verified sources)" from "suggested
+by a single source" from "unverified."
 
 ### Phase 5: Report
 
-Generate the deliverable in the format appropriate for the engagement.
-
-```
-{{TOOL_report}}(engagement_slug="...", format="{{json|markdown|csv|pdf}}")
-{{TOOL_report}}(engagement_slug="...", format="markdown", min_confidence={{threshold}})
-```
+Deliver the answer or draft with:
+- a reference list where **every entry has been verified**, and
+- an explicit "could not verify" section for anything that came back `not_found`,
+  `retracted`, `unverifiable`, or `warnings` you could not resolve.
 
 ## Iteration Pattern
 
-Good work in this domain is iterative, not linear. The standard loop:
-
-1. **Gather** from known starting points
-2. **Assess** — identify gaps and contradictions
-3. **Fill gaps** — targeted gathering on weak areas
-4. **Prune** — remove noise below confidence threshold
-5. **Expand** — follow confirmed leads outward
-6. **Repeat** until the gap analysis returns no actionable items at your target confidence level, or until the scope question is answered
-
-An engagement is "done" when you can answer the scope question with evidence that meets your delivery standard, or when you've documented why the question cannot be answered with available sources.
-
-## Novelty / Don't Redo Work
-
-When an engagement is approaching its deliverable, run novelty checks **in parallel with
-gathering** — not after. Spawn parallel subagents: one gathering and synthesizing a
-thread, one checking whether the key claims are already covered by prior work, existing
-reports, or public sources.
-
-This stops you from investing deeply in threads that are already fully handled elsewhere.
-
-For each key claim or finding, determine:
-
-1. Has this already been addressed — by a prior engagement, a public source, or an existing artifact?
-2. If yes — do we have something genuinely additional that constitutes a meaningful contribution?
-3. If no — is our sourcing strong enough to stand alone?
-
-Track each claim's novelty in one of three buckets:
-
-- **Already covered** — do not lead with these as new. Reference the prior work instead.
-- **Partially covered / gap** — possible angles; nail down what specifically is new before committing effort.
-- **Potentially original** — verify carefully before treating as confirmed. Check secondary and niche sources, not just the obvious ones: a finding in a low-circulation source is still "known."
-
-A finished deliverable is **grounded in evidence, novel relative to prior work, and tells
-a story a non-specialist would find actionable.**
-
-## Session Continuity: The Handoff Pattern
-
-Long, multi-session engagements need explicit continuity infrastructure. The agent cannot
-hold working state across sessions natively — this discipline is what replaces it.
-
-Three layers carry state across sessions:
-
-- **Standing-orders document** — what this engagement is, what it values, what the
-  current working hypothesis is. Read it at the start of every session. This is
-  engagement-specific and lives in the operator's private overlay (`skills/` in
-  `HERMES_HOME`), **not** in this shared package. See the extension-point section below.
-- **Memory layer** — accumulated findings, resolved questions, and tool quirks kept in
-  the agent's persistent memory and in per-engagement reference files.
-- **Handoff artifact** — a structured end-of-session summary written by the outgoing
-  session, read first by the incoming session.
-
-### What a Handoff Carries
-
-A handoff is not a log dump. It is a cold-start entry point. Write it so a fresh session
-can resume in under two minutes without re-deriving everything. A complete handoff
-contains:
-
-- **What happened and why** — a brief narrative of what the session did and the
-  reasoning behind the key moves. Not a transcript; a digest.
-- **Decisions with rationale** — every non-obvious decision made this session, with the
-  reason. "I chose source X over Y because..." Future sessions must be able to evaluate
-  whether the reason still holds.
-- **State per active thread** — for each open line of work: where it stands, what was
-  last done, and what the concrete next step is (specific enough to execute without
-  context).
-- **Open threads with next steps** — explicitly enumerated, each with a next action. Not
-  "look into X" but "run {{TOOL_gather}} against {{specific_identifier}} to close the gap
-  on {{specific_claim}}."
-- **Closed threads with reasons** — what was explored and set aside, and why. Prevents
-  the next session from re-opening dead ends.
-- **Cold-start entry point** — a single instruction the incoming session can execute
-  immediately to get oriented: read a specific artifact, run a specific tool call,
-  check a specific status. If the next session has to read the full handoff to know
-  where to start, the handoff is too long.
-
-Update the handoff at the end of any significant session with: novelty-assessment
-changes, new thread status, methodology lessons, and tool quirks discovered. The same
-discipline the evidence trail provides for facts, applied to the engagement's own working
-state.
+1. **Gather** candidate sources
+2. **Verify** them — drop or flag anything `not_found`/`retracted`
+3. **Fill gaps** — find better sources for weak or unverifiable claims
+4. **Expand** — follow verified sources outward (their references, citing works)
+5. **Repeat** until the question is answered with verified evidence, or you have
+   documented why it cannot be
 
 ## Quality and Ethics Floor
 
-These apply regardless of domain. Instantiators should add domain-specific guidance in
-the operator overlay.
+- Use only legal, open, and permitted sources.
+- **Never fabricate** a citation, result, dataset, or quotation. Unknown is a valid answer.
+- **Never inflate** a verifiability score or present an unverified reference as verified.
+- **Never hide** a retraction or correction.
+- Do not represent identifiable human-subject data outside a study's scope and ethics approval.
+- When in doubt about legality, ethics, or a misconduct claim about a named study, **stop and consult**.
 
-- Use only **legal, permitted** sources and methods
-- **Document methodology** for every significant finding — not just what, but how
-- **Never fabricate** findings or inflate confidence scores
-- **Grade honestly** — overconfident outputs are worse than underconfident ones
-- **Preserve raw source material** — the plugin should archive automatically; never
-  delete artifacts during an active engagement
-- When in doubt about legality or ethics, **stop and consult** before proceeding
-- The audit record is your defense — it proves you followed a systematic, reproducible
-  methodology
+## Extending This Skill: Per-Study Overlays
 
-## Extending This Skill: Per-Engagement Overlays
-
-This SKILL.md is the shared, domain-agnostic baseline. It intentionally contains no
-engagement-specific particulars — no subject names, no codenames, no engagement-specific
-tooling.
-
-Per-engagement customization lives in the **operator's private overlay**:
+This SKILL.md is the shared, domain-agnostic baseline — no study particulars, no
+participant names, no unpublished results. Study-specific context lives in the
+operator's private overlay:
 
 ```
-$HERMES_HOME/skills/{{PACKAGE_SLUG}}-{{engagement-slug}}.md
+$HERMES_HOME/skills/matilde-<study-slug>.md
 ```
 
-This file is **never committed to this repository**. It is covered by the `.gitignore`
-patterns `instance/` and `.overlay/` (and by the sanitization gate if you run it before
-pushing). The private overlay typically contains:
+That file is never committed to this repository (covered by `.gitignore`'s
+`instance/` and `.overlay/` patterns and enforced by the sanitization gate). It
+holds the standing-orders for one study: its question, the dataset under analysis,
+the working hypothesis, collaborator details, and any standing authorizations.
 
-- The standing-orders document for a specific engagement (name, scope, current hypothesis)
-- Engagement-specific tool configurations or source lists
-- Any domain particulars that would constitute PII or operational sensitivity if leaked
-
-This SKILL.md auto-links private overlays by Hermes's skill-discovery mechanism: any
-skill file whose name begins with `{{PACKAGE_SLUG}}-` and is present in `HERMES_HOME/skills/`
-is available to the agent alongside this one. No further wiring required.
-
-The sanitization gate (`scripts/check_sanitization.py`) enforces this boundary
-automatically on every PR that touches `sensitive_prefixes` paths. If you add engagement
-particulars to this shared file by mistake, the gate will catch and block the push.
-See `sanitize.config.json` for the full configuration and `docs/sanitization.md` for
-the promotion flow.
+Any skill file in `HERMES_HOME/skills/` whose name begins with `matilde-` is
+auto-discovered alongside this one — no further wiring needed.
