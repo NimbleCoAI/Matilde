@@ -1,8 +1,8 @@
 {
   "$comment": "CUSTOMIZE THIS FILE for your use case. It is the single surface that teaches the sanitization gate what 'a particular' looks like for your domain. The deterministic layer (secrets/PII) needs no tuning; the semantic layer does.",
 
-  "package_name": "your-usecase-package",
-  "package_kind": "SHARED, public agent package",
+  "package_name": "Matilde",
+  "package_kind": "SHARED, public agent package (academia/science use-case customization)",
 
   "sensitive_prefixes": [
     "hermes-skill/",
@@ -10,22 +10,24 @@
     "docker/SOUL",
     "docs/"
   ],
-  "$comment_prefixes": "Paths whose CONTENT could leak operator/case particulars. Top-level *.md (README, CONTRIBUTING) are always included automatically. Add dirs that hold prose, souls, or methodology. Do NOT add code-only dirs unless they carry comments that could leak context.",
+  "$comment_prefixes": "Paths whose CONTENT could leak study/collaborator particulars. Top-level *.md (README, CONTRIBUTING) are always included automatically. Note: published paper titles, DOIs, and dataset accession IDs used as test fixtures or examples are PUBLIC reference material, not particulars — see do_not_flag_examples.",
 
   "semantic": {
-    "domain_noun": "operational engagement",
-    "$comment_domain_noun": "What a 'particular' belongs to in your world: 'investigation' (OSINT), 'client engagement' (consulting), 'campaign' (marketing), 'patient case' (health). Used to phrase the LLM prompt.",
+    "domain_noun": "study",
+    "$comment_domain_noun": "A 'particular' belongs to one research study/manuscript/engagement. Matilde works with public scholarly metadata by design, so the gate must distinguish PUBLIC references (fine) from PRIVATE study particulars (not fine).",
     "flag_examples": [
-      "personal names of subjects, clients, targets, or end-users tied to a specific engagement",
-      "specific organization/company names tied to one active engagement (not generic/public reference)",
-      "document IDs, file names, dataset names, account handles, or URLs specific to one engagement",
-      "a codename or label that identifies one particular engagement (e.g. used as a skill name or heading)",
-      "dates, locations, monetary figures, or case details that only make sense for one engagement"
+      "names of human research participants, patients, or subjects tied to a specific study",
+      "an unpublished manuscript's content, working title, hypotheses, or results before publication",
+      "a specific dataset accession ID, file path, or repository tied to one private/in-progress study (e.g. an embargoed OpenNeuro dataset)",
+      "names of collaborators, PIs, reviewers, or institutions tied to one active engagement (not public co-author lists)",
+      "grant numbers, IRB/ethics protocol numbers, or funding details specific to one engagement",
+      "a codename or label that identifies one particular study (e.g. used as a skill name or heading)"
     ],
     "do_not_flag_examples": [
-      "generic methodology (\"how to structure a handoff\", \"how to grade a source\")",
-      "tool, API, library, or product names",
-      "well-known public reference material used illustratively"
+      "generic methodology (\"how to verify a citation\", \"how to grade a source\")",
+      "tool, API, library, standard, or service names (Crossref, OpenAlex, DataCite, GROBID, BIDS, Quarto, Pandoc)",
+      "PUBLISHED paper titles, author names, DOIs, or retraction examples used illustratively or as test fixtures (these are public record)",
+      "public dataset identifiers used as documentation examples"
     ],
     "model": "claude-opus-4-8"
   },
@@ -36,13 +38,15 @@
     "allow_substrings": [
       "noreply@anthropic.com",
       "example.com",
+      "example.org",
       "user@example",
+      "team@ourresearch.org",
       "127.0.0.1",
       "0.0.0.0"
     ],
     "skip_paths": [
       "tests/"
     ],
-    "$comment_skip_paths": "Path prefixes the deterministic layer does NOT scan. Test files legitimately contain credential-SHAPED fixtures to exercise the detectors; scanning them would self-flag. Keep this tight — only paths that intentionally hold pattern-shaped non-secrets."
+    "$comment_skip_paths": "Path prefixes the deterministic layer does NOT scan. Test files legitimately contain credential-SHAPED fixtures and public DOIs/emails to exercise the detectors; scanning them would self-flag. Keep this tight — only paths that intentionally hold pattern-shaped non-secrets."
   }
 }

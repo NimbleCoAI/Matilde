@@ -1,92 +1,110 @@
-# {{PACKAGE_NAME}}
+# Matilde — an AI research assistant for academia & science
 
-A template for building a sanitized, use-case-customised Hermes agent package — runnable standalone or managed via HSM (Hermes Swarm Map).
+**Matilde is an academic and scientific research assistant** — an AI agent package
+for working scientists, researchers, and scholars. It helps you **verify and manage
+citations**, reason over open research datasets, and (on the roadmap) draft and
+check manuscripts. Its flagship capability is a **verifiable-citations engine** that
+catches hallucinated, mismatched, and retracted references before they reach a paper.
 
-## Multiplayer by design
-
-This template targets [**hermes-agent-mt**](https://github.com/NimbleCoAI/hermes-agent-mt) —
-the multi-tenant Hermes runtime — not a single-user harness. One deployment can serve many
-users and contexts (Signal DMs, group chats, tenants) at once, which is the whole reason the
-privacy model has two levels rather than one: what your *repository* shows the world, and what
-one *user* of a running deployment can see of another. The instance overlay, the sanitization
-gate, and the glocal cross-context read floor are all here because multiplayer is the default,
-not an afterthought. If you only ever run one user against one agent, this still works — you
-just won't need half of it. See [docs/privacy-and-visibility.md](docs/privacy-and-visibility.md).
-
-The package layer itself is runtime-agnostic (a plugin + a skill + a soul + optional engine),
-but the scaffolding — base image, instance bootstrap, HSM consumption — assumes the
-`hermes-agent-mt` image as its base. Point `{{BASE_HERMES_IMAGE}}` at it in
-[docs/onboarding.md](docs/onboarding.md).
+> **What "Matilde" is, for search:** an open, science/academia use-case
+> customization of the [Egregore](https://github.com/egregore-labs/egregore) /
+> Hermes agent framework. Keywords: citation verification, hallucinated references,
+> retraction checking, Crossref / OpenAlex / DataCite, reproducibility, OpenNeuro /
+> BIDS, academic writing. The name is a person's name; the tool is a research
+> assistant.
 
 ---
 
-## Use this template
+## Why citations first
 
-Click **"Use this template"** on GitHub to create your private repo, then follow the instantiation checklist in [SETUP.md](SETUP.md).
+Large language models — and "deep research" agents especially — fabricate
+references at alarming rates. A 2026 University of Pennsylvania study found
+deep-research agents hallucinate references at **10.7%** versus **4.8%** for plain
+search-augmented models. An agent that drafts scientific writing *without* a
+verification loop actively makes the problem worse. Matilde's verifier is that loop.
 
-The checklist covers: renaming placeholders, filling `sanitize.config.json`, wiring `ANTHROPIC_API_KEY` in CI, and verifying the gate runs clean before your first real commit.
+## The verifiable-citations engine
 
----
+A citation is checked along **four independent axes**:
 
-## What you get
+| Axis | Question | How |
+|---|---|---|
+| **Existence** | Does the work actually exist? | Crossref → OpenAlex → DataCite (multi-source, so real arXiv/Zenodo/preprint DOIs are never mislabeled "fabricated") |
+| **Metadata-match** | Do title / authors / year agree? | fuzzy title match + author-surname overlap + year check |
+| **Retraction** | Has it been retracted? | Crossref's Retraction Watch data + OpenAlex `is_retracted` |
+| **URL-liveness** | If a URL is cited, does it resolve? | HTTP check with an Internet Archive (Wayback) fallback |
 
-- **Two-layer sanitization gate** — deterministic regex (secrets, PII, API keys) as a hard-fail floor; LLM-semantic scan for domain particulars as an advisory layer routed to human review. Both run on every PR diff.
-- **Instance-overlay `.gitignore`** — `engagements/` (rename per domain), `instance/`, `.overlay/`, `.env` are private by construction. Operational data cannot accidentally reach the shared package.
-- **`hermes-plugin/` scaffold** — a working `register()` skeleton with placeholder tools; drop in your domain logic.
-- **`hermes-skill/SKILL.md` baseline** — methodology stub for the agent; fill in your domain's reasoning patterns and source-evaluation criteria.
-- **Hot-mount docker setup** — `docker/Dockerfile.{{SLUG}}` + `docker/SOUL.{{SLUG}}.md`; rebuild only when system deps change, mount plugin live.
-- **Contributor and promotion docs** — `CONTRIBUTING.md` explains the three ways to add a capability; `docs/promotion-and-upstream.md` explains when and how a private instance contributes back to the shared package.
-- **CI workflow** — `.github/workflows/sanitization.yml` runs scanner self-tests and the diff-mode gate on every PR.
+Each citation gets a composite **verifiability score (0–1)** and a **verdict**:
+`verified` · `warnings` · `retracted` · `not_found` · `unverifiable`.
 
----
+### Honest scope: *verifiable*, not *provably correct*
 
-## The model
+There is no formal proof that a citation is "correct." Axes 1–3 above are
+near-deterministic and reliable today. The hardest axis — **claim-support
+grounding** (does the cited passage actually substantiate the sentence that cites
+it?) — is irreducibly probabilistic and is planned for **v2** (GROBID for PDF
+parsing + a SciFact/SemanticCite-style classifier). Matilde reports a confidence
+score and an evidence trail, never a false certainty.
 
+## Tools the agent gets
+
+| Tool | What it does |
+|---|---|
+| `matilde_verify_citation` | Verify one reference (any of: doi, title, authors, year, url) → verdict + score + per-axis detail |
+| `matilde_verify_bibliography` | Verify a whole reference list → per-item verdicts + a summary + the items that need attention |
+| `matilde_check_retraction` | Quick retraction-only check by DOI |
+
+No API keys required — Crossref, OpenAlex, and DataCite are free and
+unauthenticated. Optionally set `MATILDE_CONTACT_EMAIL` to join the providers'
+polite pools.
+
+## Try it
+
+```python
+from engine.citations import Reference, verify_reference
+
+ref = Reference(title="Attention Is All You Need",
+                authors=["Vaswani", "Shazeer"], year=2017,
+                doi="10.48550/arXiv.1706.03762")
+result = verify_reference(ref)
+print(result.verdict, result.score)   # -> e.g. "verified" 1.0
 ```
-fork → develop privately under operational pressure
-     → generalize + sanitize
-     → contribute through the gate
+
+```bash
+python3 -m pytest tests/ --ignore=tests/test_citations_integration.py   # offline unit suite
+MATILDE_LIVE=1 python3 -m pytest tests/test_citations_integration.py    # live API checks
 ```
 
-You build under real conditions in your private instance. When a capability proves itself generic, you strip the particulars, run the gate, and open a PR. The gate catches what you missed. A maintainer makes the final call. That loop — not upfront design — is how the shared package stays both useful and clean.
+## Roadmap
+
+Matilde grows outward from citations toward a full scientific research assistant:
+
+- **v2 — claim-support grounding**: GROBID PDF→TEI + SciFact/SemanticCite passage-level
+  "does the source actually support this claim?"
+- **Neuroscience / OpenNeuro**: pull and reason over [OpenNeuro](https://openneuro.org)
+  / BIDS datasets (openneuro-py, DataLad, NiMARE); validate, analyze, replicate.
+- **Meta-science**: statistical re-checking of published results (statcheck, GRIM/SPRITE,
+  p-curve) to flag reporting inconsistencies.
+- **Manuscript writing → LaTeX**: draft in Google Docs (multiplayer), convert via
+  Pandoc/Quarto, with citation management wired to CSL/`.bib`.
+- **Autonomous mode (aspirational)**: scheduled agents that attempt to replicate or
+  invalidate existing studies and surface novel leads.
+
+## Architecture & layout
+
+Matilde is built on the Hermes use-case-package template: a plugin + a skill + a soul
++ an engine, runnable standalone or managed via HSM. See the template's docs for the
+privacy model, sanitization gate, and promotion flow.
+
+| Path | What it is |
+|------|-----------|
+| `engine/citations.py` | The verifiable-citations engine (the core; the part we may open-source standalone) |
+| `hermes-plugin/` | Hermes tool definitions exposing the engine to the agent |
+| `hermes-skill/SKILL.md` | The agent's research methodology |
+| `docker/SOUL.Matilde.md` | The research-assistant identity |
+| `tests/` | Offline unit suite + live API integration tests |
 
 ---
 
-## Layout
-
-| Path | What it's for | Customize? |
-|------|---------------|-----------|
-| `engine/` | Your domain logic: data model, scoring, dedup, audit | Yes — this is your core |
-| `example-collectors/` | Example data-source integrations; copy and adapt | Yes — add real collectors here |
-| `hermes-plugin/` | Plugin `register()` + tool definitions for the agent | Yes — expose your engine as agent tools |
-| `hermes-skill/SKILL.md` | Agent methodology: how to reason, grade sources, iterate | Yes — define your domain's patterns |
-| `docker/SOUL.{{SLUG}}.md` | Agent identity / soul for your domain | Yes — set role, defaults, tone |
-| `docker/Dockerfile.{{SLUG}}` | System-level deps (binaries, libraries) for the agent image | Only if you need system deps |
-| `engagements/` | Per-engagement working data — gitignored, stays local | N/A — ignored by construction |
-| `instance/` `.overlay/` | Operator-local overrides, instance-specific config | N/A — ignored by construction |
-| `scripts/check_sanitization.py` | The sanitization gate — runs in CI and via gardener | No — leave alone |
-| `.github/workflows/sanitization.yml` | CI gate | No — leave alone |
-| `.gitignore` | Instance-overlay privacy model | No — leave alone |
-| `sanitize.config.json` | **The one tuning surface** — teach the gate your domain | Yes — required on setup |
-
----
-
-## Two ways to run
-
-**Standalone** — clone the repo, mount `hermes-plugin/` into an existing Hermes instance, and start the agent. See [docs/onboarding.md](docs/onboarding.md).
-
-**HSM-managed** — register the package in HSM, which handles image builds, env injection, and lifecycle. See [docs/onboarding.md](docs/onboarding.md#hsm).
-
----
-
-## Privacy
-
-Operational data is private by construction (`.gitignore`) and by automated scan (sanitization gate). See [docs/privacy-and-visibility.md](docs/privacy-and-visibility.md).
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the three ways to add a capability and the sanitization workflow.
-
-When a capability is ready to promote from your private instance back to this shared package, see [docs/promotion-and-upstream.md](docs/promotion-and-upstream.md).
+*Matilde is private during development. The citation engine is intended for the public
+commons once it has proven itself — promoted through the template's sanitization gate.*
