@@ -256,3 +256,122 @@ def _handle_check_retraction(args: dict, **kwargs: Any) -> str:
         )
     except Exception as exc:
         return _tool_error(f"check_retraction failed: {type(exc).__name__}: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Tool: OpenNeuro dataset metadata
+# ---------------------------------------------------------------------------
+
+OPENNEURO_INFO_SCHEMA = {
+    "name": "matilde_openneuro_dataset_info",
+    "description": (
+        "Get metadata for an OpenNeuro neuroimaging dataset by accession ID "
+        "(e.g. 'ds000246'): human title, authors, imaging modalities (meg/mri/"
+        "eeg/ieeg/ecog), subjects, tasks, total size, and latest snapshot tag. "
+        "OpenNeuro hosts public BIDS-formatted brain-imaging datasets."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "dataset_id": {"type": "string", "description": "OpenNeuro accession ID, e.g. 'ds000246'."},
+        },
+        "required": ["dataset_id"],
+    },
+}
+
+
+def _handle_openneuro_dataset_info(args: dict, **kwargs: Any) -> str:
+    dsid = str(args.get("dataset_id", "")).strip()
+    if not dsid:
+        return _tool_error("'dataset_id' is required (e.g. 'ds000246').")
+    try:
+        from engine.openneuro import get_dataset, OpenNeuroError
+        try:
+            ds = get_dataset(dsid)
+        except OpenNeuroError as exc:
+            return _tool_error(str(exc), dataset_id=dsid)
+        payload = ds.to_dict()
+        payload["message"] = (f"{ds.id}: '{ds.name}' — modalities {ds.modalities}, "
+                              f"{len(ds.subjects)} subject(s), {ds.size} bytes "
+                              f"(snapshot {ds.latest_tag}).")
+        return _tool_result(payload)
+    except Exception as exc:
+        return _tool_error(f"openneuro_dataset_info failed: {type(exc).__name__}: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Tool: OpenNeuro dataset listing
+# ---------------------------------------------------------------------------
+
+OPENNEURO_SEARCH_SCHEMA = {
+    "name": "matilde_openneuro_search",
+    "description": (
+        "List OpenNeuro dataset accession IDs (most recent first) to discover "
+        "datasets. This lists rather than full-text-searches; call "
+        "matilde_openneuro_dataset_info on candidates to inspect modalities/tasks "
+        "and filter. Use to find brain-imaging datasets to analyze or replicate."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "limit": {"type": "integer", "description": "How many dataset IDs to return (default 20)."},
+        },
+        "required": [],
+    },
+}
+
+
+def _handle_openneuro_search(args: dict, **kwargs: Any) -> str:
+    try:
+        from engine.openneuro import list_datasets
+        limit = args.get("limit") or 20
+        try:
+            limit = max(1, min(int(limit), 100))
+        except (TypeError, ValueError):
+            limit = 20
+        ids = list_datasets(limit=limit)
+        return _tool_result(count=len(ids), dataset_ids=ids,
+                            message=f"Listed {len(ids)} OpenNeuro dataset(s).")
+    except Exception as exc:
+        return _tool_error(f"openneuro_search failed: {type(exc).__name__}: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Tool: OpenNeuro file listing
+# ---------------------------------------------------------------------------
+
+OPENNEURO_FILES_SCHEMA = {
+    "name": "matilde_openneuro_list_files",
+    "description": (
+        "List the files in an OpenNeuro dataset's latest snapshot — filename, size, "
+        "and a direct download URL for each. Use to inspect a dataset's structure "
+        "(BIDS layout) or to get a URL for a specific file before downloading."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "dataset_id": {"type": "string", "description": "OpenNeuro accession ID, e.g. 'ds000246'."},
+            "tag": {"type": "string", "description": "Snapshot tag (optional; defaults to the latest)."},
+        },
+        "required": ["dataset_id"],
+    },
+}
+
+
+def _handle_openneuro_list_files(args: dict, **kwargs: Any) -> str:
+    dsid = str(args.get("dataset_id", "")).strip()
+    if not dsid:
+        return _tool_error("'dataset_id' is required (e.g. 'ds000246').")
+    try:
+        from engine.openneuro import list_files, OpenNeuroError
+        tag = str(args.get("tag", "")).strip() or None
+        try:
+            files = list_files(dsid, tag=tag)
+        except OpenNeuroError as exc:
+            return _tool_error(str(exc), dataset_id=dsid)
+        return _tool_result(
+            dataset_id=dsid, count=len(files), files=files,
+            message=f"{dsid} has {len(files)} file(s) in its snapshot.",
+        )
+    except Exception as exc:
+        return _tool_error(f"openneuro_list_files failed: {type(exc).__name__}: {exc}")

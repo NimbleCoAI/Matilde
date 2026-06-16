@@ -24,13 +24,16 @@ def _load_plugin():
     return mod
 
 
-def test_plugin_loads_and_registers_three_tools():
+def test_plugin_registers_expected_tools():
     plugin = _load_plugin()
     names = [t[0] for t in plugin._TOOLS]
     assert names == [
         "matilde_verify_citation",
         "matilde_verify_bibliography",
         "matilde_check_retraction",
+        "matilde_openneuro_dataset_info",
+        "matilde_openneuro_search",
+        "matilde_openneuro_list_files",
     ]
 
 
@@ -43,7 +46,7 @@ def test_register_calls_ctx_for_each_tool():
             calls.append(kw)
 
     plugin.register(Ctx())
-    assert len(calls) == 3
+    assert len(calls) == len(plugin._TOOLS)
     assert all(c["toolset"] == "matilde" for c in calls)
     assert all(callable(c["handler"]) and callable(c["check_fn"]) for c in calls)
     # schema name must match the registered tool name
@@ -71,6 +74,28 @@ def test_verify_bibliography_rejects_non_list():
 def test_check_retraction_requires_doi():
     plugin = _load_plugin()
     out = json.loads(plugin._handle_check_retraction({}))
+    assert out["success"] is False
+
+
+def test_openneuro_dataset_info_envelope_includes_message_and_fields(monkeypatch):
+    plugin = _load_plugin()
+    import engine.openneuro as on
+
+    def fake_get_dataset(dsid, gql=None):
+        return on.Dataset(id=dsid, name="Demo MEG", modalities=["meg"],
+                          subjects=["0001"], size=123, latest_tag="1.0.0")
+
+    monkeypatch.setattr(on, "get_dataset", fake_get_dataset)
+    out = json.loads(plugin._handle_openneuro_dataset_info({"dataset_id": "ds000246"}))
+    assert out["success"] is True
+    assert out["id"] == "ds000246"
+    assert out["modalities"] == ["meg"]
+    assert "message" in out and "Demo MEG" in out["message"]
+
+
+def test_openneuro_dataset_info_requires_id():
+    plugin = _load_plugin()
+    out = json.loads(plugin._handle_openneuro_dataset_info({}))
     assert out["success"] is False
 
 

@@ -8,17 +8,20 @@ name: "matilde"
 
 version: "0.1.0"
 
-description: "Matilde — verifiable academic citations: existence, metadata-match, retraction, and URL-liveness checking against Crossref, OpenAlex, and DataCite."
+description: "Matilde — academic research assistant: verifiable citations (Crossref/OpenAlex/DataCite + retraction) and OpenNeuro/BIDS dataset discovery."
 
 author: "NimbleCoAI"
 
 kind: standalone
 
-# No credentials required — Crossref, OpenAlex, and DataCite are free and
-# unauthenticated. MATILDE_CONTACT_EMAIL is optional (joins providers' polite
-# pools) and is therefore NOT listed as required env.
+# No credentials required — Crossref, OpenAlex, DataCite, and OpenNeuro's public
+# API/S3 are all free and unauthenticated. MATILDE_CONTACT_EMAIL is optional
+# (joins providers' polite pools) and is therefore NOT listed as required env.
 
 provides_tools:
   - "matilde_verify_citation"
   - "matilde_verify_bibliography"
   - "matilde_check_retraction"
+  - "matilde_openneuro_dataset_info"
+  - "matilde_openneuro_search"
+  - "matilde_openneuro_list_files"
