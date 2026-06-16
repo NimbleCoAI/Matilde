@@ -6,7 +6,7 @@ Usage::
     python3 -m engine.cli dois.txt                 # verify a list of DOIs
     python3 -m engine.cli --doi 10.1038/171737a0   # verify one DOI
     python3 -m engine.cli refs.bib --json          # machine-readable output
-    python3 -m engine.cli refs.bib --email you@uni.edu   # polite-pool contact
+    python3 -m engine.cli refs.bib --email you@example.org   # polite-pool contact
 
 Exit codes: 0 = all references verified / only warnings; 1 = at least one
 ``not_found`` or ``retracted`` reference (useful as a pre-commit / CI gate on a

@@ -53,6 +53,9 @@ score and an evidence trail, never a false certainty.
 | `matilde_verify_citation` | Verify one reference (any of: doi, title, authors, year, url) → verdict + score + per-axis detail |
 | `matilde_verify_bibliography` | Verify a whole reference list → per-item verdicts + a summary + the items that need attention |
 | `matilde_check_retraction` | Quick retraction-only check by DOI |
+| `matilde_openneuro_dataset_info` | Metadata for an OpenNeuro dataset (title, authors, modalities, subjects, tasks, size) |
+| `matilde_openneuro_search` | List OpenNeuro dataset IDs to discover brain-imaging datasets |
+| `matilde_openneuro_list_files` | List a dataset's files with sizes and direct download URLs |
 
 No API keys required — Crossref, OpenAlex, and DataCite are free and
 unauthenticated. Optionally set `MATILDE_CONTACT_EMAIL` to join the providers'
@@ -104,10 +107,12 @@ MATILDE_LIVE=1 python3 -m pytest tests/test_citations_integration.py    # live A
 
 Matilde grows outward from citations toward a full scientific research assistant:
 
+- **Neuroscience / OpenNeuro** — *discovery shipped* ✅: search datasets, read metadata,
+  list/download files over the public GraphQL API + S3 (stdlib-only, no datalad needed).
+  *Next:* BIDS-compliance validation, then heavier analysis (fMRIPrep, NiMARE
+  meta-analysis) behind the Docker layer.
 - **v2 — claim-support grounding**: GROBID PDF→TEI + SciFact/SemanticCite passage-level
   "does the source actually support this claim?"
-- **Neuroscience / OpenNeuro**: pull and reason over [OpenNeuro](https://openneuro.org)
-  / BIDS datasets (openneuro-py, DataLad, NiMARE); validate, analyze, replicate.
 - **Meta-science**: statistical re-checking of published results (statcheck, GRIM/SPRITE,
   p-curve) to flag reporting inconsistencies.
 - **Manuscript writing → LaTeX**: draft in Google Docs (multiplayer), convert via
@@ -124,6 +129,8 @@ privacy model, sanitization gate, and promotion flow.
 | Path | What it is |
 |------|-----------|
 | `engine/citations.py` | The verifiable-citations engine (the core; the part we may open-source standalone) |
+| `engine/openneuro.py` | Read-only OpenNeuro/BIDS client — discovery, metadata, files (stdlib-only) |
+| `engine/parsing.py` · `engine/cli.py` | BibTeX/DOI ingestion + the `matilde` verify CLI |
 | `hermes-plugin/` | Hermes tool definitions exposing the engine to the agent |
 | `hermes-skill/SKILL.md` | The agent's research methodology |
 | `docker/SOUL.Matilde.md` | The research-assistant identity |
