@@ -31,6 +31,14 @@ def test_detects_ipv4_but_allows_loopback():
     assert not any(l == "ipv4" for l, _ in cs.scan_deterministic("bind 127.0.0.1", ["127.0.0.1"]))
 
 
+def test_detects_international_phone():
+    # E.164 form with no separators — the us-phone pattern misses these entirely.
+    assert any(l == "intl-phone" for l, _ in cs.scan_deterministic("contact +442079460958 anytime", []))
+    assert any(l == "intl-phone" for l, _ in cs.scan_deterministic("MATILDE_CONTACT=+4915123456789", []))
+    # Not a phone: a short +N token (version, diff count) must not trip it.
+    assert not any(l == "intl-phone" for l, _ in cs.scan_deterministic("rebased +1234 ahead", []))
+
+
 def test_generic_methodology_is_clean():
     assert cs.scan_deterministic("Structure a handoff: decisions, threads, next step.", []) == []
 

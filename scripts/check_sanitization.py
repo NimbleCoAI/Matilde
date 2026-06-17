@@ -59,6 +59,9 @@ _DETERMINISTIC_PATTERNS = [
     ("private-key-block", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----")),
     ("email", re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")),
     ("us-phone", re.compile(r"(?<!\d)(?:\+?1[\s.\-]?)?\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}(?!\d)")),
+    # E.164 international (e.g. a contact wired into config/SOUL): "+" + 7–15 digits,
+    # no separators. The us-phone pattern only covers North-American formatting.
+    ("intl-phone", re.compile(r"(?<!\d)\+\d{7,15}(?!\d)")),
     ("ipv4", re.compile(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)")),
 ]
 

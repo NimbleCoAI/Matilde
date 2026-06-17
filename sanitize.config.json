@@ -21,7 +21,8 @@
       "a specific dataset accession ID, file path, or repository tied to one private/in-progress study (e.g. an embargoed OpenNeuro dataset)",
       "names of collaborators, PIs, reviewers, or institutions tied to one active engagement (not public co-author lists)",
       "grant numbers, IRB/ethics protocol numbers, or funding details specific to one engagement",
-      "a codename or label that identifies one particular study (e.g. used as a skill name or heading)"
+      "a codename or label that identifies one particular study (e.g. used as a skill name or heading)",
+      "a messaging or account identifier tied to a real person — a Signal/Telegram UUID, a contact phone, an allowlisted user ID (these belong in deployment config/secrets, never in the package)"
     ],
     "do_not_flag_examples": [
       "generic methodology (\"how to verify a citation\", \"how to grade a source\")",
