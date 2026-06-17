@@ -7,8 +7,7 @@ check manuscripts. Its flagship capability is a **verifiable-citations engine** 
 catches hallucinated, mismatched, and retracted references before they reach a paper.
 
 > **What "Matilde" is, for search:** an open, science/academia use-case
-> customization of the [Egregore](https://github.com/egregore-labs/egregore) /
-> Hermes agent framework. Keywords: citation verification, hallucinated references,
+> package for the Hermes agent framework. Keywords: citation verification, hallucinated references,
 > retraction checking, Crossref / OpenAlex / DataCite, reproducibility, OpenNeuro /
 > BIDS, academic writing. The name is a person's name; the tool is a research
 > assistant.
