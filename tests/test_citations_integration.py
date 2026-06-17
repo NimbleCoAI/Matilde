@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
 
-from engine.citations import (  # noqa: E402
+from matilde_plugin.engine.citations import (  # noqa: E402
     Reference,
     check_retraction,
     default_fetch,

@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
 
-from engine.openneuro import get_dataset, list_datasets, list_files  # noqa: E402
+from matilde_plugin.engine.openneuro import get_dataset, list_datasets, list_files  # noqa: E402
 
 LIVE = os.environ.get("MATILDE_LIVE") == "1"
 pytestmark = pytest.mark.skipif(not LIVE, reason="set MATILDE_LIVE=1 to run live API tests")

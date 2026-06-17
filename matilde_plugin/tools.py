@@ -1,6 +1,6 @@
 """Matilde tools for Hermes — verifiable-citation checking.
 
-These tools expose the ``engine.citations`` verifier to the agent. A citation is
+These tools expose the bundled ``.engine.citations`` verifier to the agent. A citation is
 checked along four axes (existence, metadata-match, retraction, URL-liveness) and
 scored. This is *verifiable*, not *provably correct* — the score is a confidence,
 not a proof. Claim-support grounding (does the cited passage back the claim?) is a
@@ -17,17 +17,12 @@ string built by ``_tool_result`` / ``_tool_error``. They never raise.
 from __future__ import annotations
 
 import json
-import os
-import sys
 from typing import Any
 
-# ---------------------------------------------------------------------------
-# Path setup — make the package root importable (engine/ lives one level up).
-# ---------------------------------------------------------------------------
-_PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
-_PACKAGE_ROOT = os.path.normpath(os.path.join(_PLUGIN_DIR, ".."))
-if _PACKAGE_ROOT not in sys.path:
-    sys.path.insert(0, _PACKAGE_ROOT)
+# The engine lives INSIDE this plugin package (matilde_plugin/engine/), so it is
+# imported via relative imports below — no sys.path manipulation needed. Imports
+# are done lazily at call time so the plugin still registers (the _check_available
+# gate guards execution) even if an import would fail.
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +53,7 @@ def _check_available() -> bool:
     so the only real prerequisite is that the engine module loads.
     """
     try:
-        import engine.citations  # noqa: F401
+        from .engine import citations  # noqa: F401
         return True
     except Exception:
         return False
@@ -69,7 +64,7 @@ def _check_available() -> bool:
 # ---------------------------------------------------------------------------
 
 def _reference_from_args(d: dict) -> Any:
-    from engine.citations import Reference
+    from .engine.citations import Reference
     authors = d.get("authors") or []
     if isinstance(authors, str):
         # accept "Vaswani; Shazeer" or "Vaswani, Shazeer"
@@ -126,7 +121,7 @@ def _handle_verify_citation(args: dict, **kwargs: Any) -> str:
     if not (args.get("doi") or args.get("title")):
         return _tool_error("Provide at least a 'doi' or a 'title' to verify.")
     try:
-        from engine.citations import verify_reference
+        from .engine.citations import verify_reference
         ref = _reference_from_args(args)
         result = verify_reference(ref)
         out = result.to_dict()
@@ -187,7 +182,7 @@ def _handle_verify_bibliography(args: dict, **kwargs: Any) -> str:
     if not isinstance(refs, list) or not refs:
         return _tool_error("'references' must be a non-empty list of citation objects.")
     try:
-        from engine.citations import verify_reference
+        from .engine.citations import verify_reference
         results, summary = [], {}
         flagged = []
         for i, item in enumerate(refs):
@@ -244,7 +239,7 @@ def _handle_check_retraction(args: dict, **kwargs: Any) -> str:
     if not doi:
         return _tool_error("'doi' is required.")
     try:
-        from engine.citations import check_retraction, default_fetch
+        from .engine.citations import check_retraction, default_fetch
         res = check_retraction(doi, fetch=default_fetch)
         return _tool_result(
             doi=doi,
@@ -285,7 +280,7 @@ def _handle_openneuro_dataset_info(args: dict, **kwargs: Any) -> str:
     if not dsid:
         return _tool_error("'dataset_id' is required (e.g. 'ds000246').")
     try:
-        from engine.openneuro import get_dataset, OpenNeuroError
+        from .engine.openneuro import get_dataset, OpenNeuroError
         try:
             ds = get_dataset(dsid)
         except OpenNeuroError as exc:
@@ -323,7 +318,7 @@ OPENNEURO_SEARCH_SCHEMA = {
 
 def _handle_openneuro_search(args: dict, **kwargs: Any) -> str:
     try:
-        from engine.openneuro import list_datasets
+        from .engine.openneuro import list_datasets
         limit = args.get("limit") or 20
         try:
             limit = max(1, min(int(limit), 100))
@@ -363,7 +358,7 @@ def _handle_openneuro_list_files(args: dict, **kwargs: Any) -> str:
     if not dsid:
         return _tool_error("'dataset_id' is required (e.g. 'ds000246').")
     try:
-        from engine.openneuro import list_files, OpenNeuroError
+        from .engine.openneuro import list_files, OpenNeuroError
         tag = str(args.get("tag", "")).strip() or None
         try:
             files = list_files(dsid, tag=tag)

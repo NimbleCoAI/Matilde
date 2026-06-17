@@ -6,7 +6,7 @@ import sys
 
 sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
 
-from engine.parsing import parse_bibtex, parse_dois  # noqa: E402
+from matilde_plugin.engine.parsing import parse_bibtex, parse_dois  # noqa: E402
 
 
 SAMPLE_BIB = r"""

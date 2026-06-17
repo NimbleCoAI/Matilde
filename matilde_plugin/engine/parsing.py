@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from engine.citations import Reference, _normalize_doi
+from .citations import Reference, _normalize_doi
 
 
 def _strip_value(raw: str) -> str:

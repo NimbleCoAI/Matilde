@@ -2,7 +2,7 @@
 
 The engine is the package's core: it verifies a citation along four independent
 axes (existence, metadata-match, retraction, URL-liveness) and produces a
-composite verifiability score and verdict. See :mod:`engine.citations`.
+composite verifiability score and verdict. See :mod:`matilde_plugin.engine.citations`.
 
 This is *verifiable*, not *provably correct* — axes 1-3 are near-deterministic;
 claim-support grounding (does the cited passage substantiate the claim?) is the
@@ -10,7 +10,7 @@ probabilistic v2 axis and is not yet implemented.
 """
 from __future__ import annotations
 
-from engine.citations import (
+from .citations import (
     AxisResult,
     Reference,
     VerificationResult,

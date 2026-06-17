@@ -39,7 +39,7 @@ def load_config(root="."):
         # Sensible defaults so the gate still runs on a fresh template.
         return {
             "package_kind": "SHARED, public agent package",
-            "sensitive_prefixes": ["hermes-skill/", "hermes-plugin/", "docker/SOUL", "docs/"],
+            "sensitive_prefixes": ["hermes-skill/", "matilde_plugin/", "docker/SOUL", "docs/"],
             "semantic": {"domain_noun": "operational engagement", "flag_examples": [],
                          "do_not_flag_examples": [], "model": "claude-opus-4-8"},
             "deterministic": {"enabled": True, "allow_substrings": []},

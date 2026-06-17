@@ -6,7 +6,7 @@
 
   "sensitive_prefixes": [
     "hermes-skill/",
-    "hermes-plugin/",
+    "matilde_plugin/",
     "docker/SOUL",
     "docs/"
   ],

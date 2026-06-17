@@ -63,7 +63,7 @@ polite pools.
 ## Try it
 
 ```python
-from engine.citations import Reference, verify_reference
+from matilde_plugin.engine.citations import Reference, verify_reference
 
 ref = Reference(title="Attention Is All You Need",
                 authors=["Vaswani", "Shazeer"], year=2017,
@@ -75,10 +75,10 @@ print(result.verdict, result.score)   # -> e.g. "verified" 1.0
 ### Command line — verify a whole bibliography
 
 ```bash
-python3 -m engine.cli refs.bib                  # verify a BibTeX file
-python3 -m engine.cli dois.txt                  # or a list of DOIs (one per line)
-python3 -m engine.cli --doi 10.1038/171737a0    # or a single DOI
-python3 -m engine.cli refs.bib --json           # machine-readable
+python3 -m matilde_plugin.engine.cli refs.bib                  # verify a BibTeX file
+python3 -m matilde_plugin.engine.cli dois.txt                  # or a list of DOIs (one per line)
+python3 -m matilde_plugin.engine.cli --doi 10.1038/171737a0    # or a single DOI
+python3 -m matilde_plugin.engine.cli refs.bib --json           # machine-readable
 ```
 
 Output for a mixed bibliography:
@@ -121,16 +121,18 @@ Matilde grows outward from citations toward a full scientific research assistant
 
 ## Architecture & layout
 
-Matilde is built on the Hermes use-case-package template: a plugin + a skill + a soul
-+ an engine, runnable standalone or managed via HSM. See the template's docs for the
-privacy model, sanitization gate, and promotion flow.
+Matilde is built on the Hermes use-case-package template: a plugin + a skill + a soul,
+runnable standalone or managed via HSM. The engine lives **inside** the plugin
+(`matilde_plugin/engine/`) so the plugin directory is a self-contained, copyable
+artifact. See the template's docs for the privacy model, sanitization gate, and
+promotion flow.
 
 | Path | What it is |
 |------|-----------|
-| `engine/citations.py` | The verifiable-citations engine (the core; the part we may open-source standalone) |
-| `engine/openneuro.py` | Read-only OpenNeuro/BIDS client — discovery, metadata, files (stdlib-only) |
-| `engine/parsing.py` · `engine/cli.py` | BibTeX/DOI ingestion + the `matilde` verify CLI |
-| `hermes-plugin/` | Hermes tool definitions exposing the engine to the agent |
+| `matilde_plugin/` | Self-contained Hermes plugin — tool definitions **plus** the bundled engine |
+| `matilde_plugin/engine/citations.py` | The verifiable-citations engine (the core; the part we may open-source standalone) |
+| `matilde_plugin/engine/openneuro.py` | Read-only OpenNeuro/BIDS client — discovery, metadata, files (stdlib-only) |
+| `matilde_plugin/engine/parsing.py` · `matilde_plugin/engine/cli.py` | BibTeX/DOI ingestion + the `matilde` verify CLI (`python3 -m matilde_plugin.engine.cli`) |
 | `hermes-skill/SKILL.md` | The agent's research methodology |
 | `docker/SOUL.Matilde.md` | The research-assistant identity |
 | `tests/` | Offline unit suite + live API integration tests |
