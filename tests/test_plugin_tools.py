@@ -17,7 +17,7 @@ sys.path.insert(0, ROOT)
 
 
 def _load_plugin():
-    path = os.path.join(ROOT, "hermes-plugin", "__init__.py")
+    path = os.path.join(ROOT, "matilde_plugin", "__init__.py")
     spec = importlib.util.spec_from_file_location("matilde_plugin", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -79,7 +79,7 @@ def test_check_retraction_requires_doi():
 
 def test_openneuro_dataset_info_envelope_includes_message_and_fields(monkeypatch):
     plugin = _load_plugin()
-    import engine.openneuro as on
+    import matilde_plugin.engine.openneuro as on
 
     def fake_get_dataset(dsid, gql=None):
         return on.Dataset(id=dsid, name="Demo MEG", modalities=["meg"],

@@ -12,8 +12,8 @@ import pytest
 
 sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
 
-from engine import cli  # noqa: E402
-from engine.citations import AxisResult, Reference, VerificationResult  # noqa: E402
+from matilde_plugin.engine import cli  # noqa: E402
+from matilde_plugin.engine.citations import AxisResult, Reference, VerificationResult  # noqa: E402
 
 
 def _result(ref: Reference, verdict: str = "verified", score: float = 1.0) -> VerificationResult:

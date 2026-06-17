@@ -1,8 +1,11 @@
 # plugin.yaml — Hermes plugin manifest for Matilde (verifiable citations)
 #
 # Register the plugin by symlinking it into the agent's plugin dir:
-#   ~/.hermes-{agent-name}/plugins/matilde -> /path/to/Matilde/hermes-plugin/
+#   ~/.hermes-{agent-name}/plugins/matilde -> /path/to/Matilde/matilde_plugin/
 # Then restart the agent (or `hermes plugin reload` if supported).
+#
+# This directory is self-contained: the citation/OpenNeuro engine lives inside it
+# (matilde_plugin/engine/), so copying ONLY this dir is enough to run the plugin.
 
 name: "matilde"
 

@@ -1,6 +1,6 @@
 """matilde plugin — registers Matilde's verifiable-citation tools with Hermes.
 
-Wraps the ``engine.citations`` verifier as Hermes tools. Each tool maps to a core
+Wraps the bundled ``.engine.citations`` verifier as Hermes tools. Each tool maps to a core
 operation: verify one citation, verify a whole bibliography, or quick-check a
 retraction. The engine is imported at tool-invocation time (via _check_available),
 so the plugin registers even if imports have issues — the gate handles execution.
@@ -8,25 +8,42 @@ so the plugin registers even if imports have issues — the gate handles executi
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import os
 import sys
 
 # ---------------------------------------------------------------------------
-# Path setup — package root (engine/) is one level above this file.
+# Self-contained loading.
+#
+# The plugin is a self-contained package: ``engine/`` lives INSIDE this dir, and
+# ``tools.py`` imports it via relative imports (``from .engine.citations import …``).
+# Copying ONLY this directory into another location still imports cleanly.
+#
+# Hermes (and the test harness) load this ``__init__.py`` directly by file path
+# under the name ``matilde_plugin``. For ``tools.py``'s relative imports to
+# resolve, this module must be registered in ``sys.modules`` as a package (with a
+# search path) before we import ``tools``. We ensure that here, then import
+# ``tools`` as a real submodule.
 # ---------------------------------------------------------------------------
 _PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
-_PACKAGE_ROOT = os.path.normpath(os.path.join(_PLUGIN_DIR, ".."))
-if _PACKAGE_ROOT not in sys.path:
-    sys.path.insert(0, _PACKAGE_ROOT)
+_PKG = __name__ if __name__ != "__main__" else "matilde_plugin"
 
-# ---------------------------------------------------------------------------
-# Load tools.py from this directory (import-path agnostic).
-# ---------------------------------------------------------------------------
-_tools_path = os.path.join(_PLUGIN_DIR, "tools.py")
-_spec = importlib.util.spec_from_file_location("_matilde_tools", _tools_path)
-_tools_mod = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_tools_mod)
+# Register THIS module as a package in sys.modules so relative imports resolve,
+# even when we were loaded by file path (spec_from_file_location does not always
+# pre-register the parent package or give it a search path).
+_self = sys.modules.get(_PKG)
+if _self is None:
+    _self = sys.modules[__name__]
+    sys.modules[_PKG] = _self
+if getattr(_self, "__path__", None) is None:
+    _self.__path__ = [_PLUGIN_DIR]  # mark as a package
+if getattr(_self, "__package__", None) in (None, ""):
+    _self.__package__ = _PKG
+
+# Import tools.py as the submodule ``<pkg>.tools`` so its ``from .engine…``
+# relative imports resolve against this package.
+_tools_mod = importlib.import_module(f"{_PKG}.tools")
 
 # ---------------------------------------------------------------------------
 # Re-export schemas, handlers, and the availability gate.

@@ -26,10 +26,10 @@ the key in HSM or their `.env`. That is a runtime concern, not a code change.
 | You want to…          | Where it goes                                    | How it ships                                     |
 |-----------------------|--------------------------------------------------|--------------------------------------------------|
 | Add an **API key**    | operator's HSM env or `.env`                     | injected at runtime — **not a code change**      |
-| Add a **tool/skill**  | `hermes-plugin/` or `hermes-skill/`              | merged here → instances pull + restart           |
+| Add a **tool/skill**  | `matilde_plugin/` or `hermes-skill/`              | merged here → instances pull + restart           |
 | Add a **system binary** (`{{EXAMPLE_TOOL}}`, …) | `docker/Dockerfile.{{PACKAGE_NAME}}` | image rebuild + redeploy (operator action) |
 
-When in doubt, reach for `hermes-plugin/` over the Dockerfile. An image rebuild
+When in doubt, reach for `matilde_plugin/` over the Dockerfile. An image rebuild
 requires a coordinated operator action across all deployed instances; a plugin pull is
 just `git pull` + restart.
 
@@ -45,7 +45,7 @@ just `git pull` + restart.
 
 ## Sanitization
 
-Every PR that touches `hermes-skill/`, `hermes-plugin/`, `docker/SOUL*`, `docs/`, or
+Every PR that touches `hermes-skill/`, `matilde_plugin/`, `docker/SOUL*`, `docs/`, or
 top-level markdown files is scanned automatically by `scripts/check_sanitization.py`.
 The scanner has two layers:
 
@@ -96,7 +96,7 @@ it gets added as a plugin (see below) — but the key value itself is never comm
 
 ### New tool/skill
 
-Create the tool in `hermes-plugin/` following the existing plugin conventions, or add
+Create the tool in `matilde_plugin/` following the existing plugin conventions, or add
 a skill document to `hermes-skill/`. Open a PR. Once merged, operators pull the update
 and restart their agent. No image rebuild required.
 

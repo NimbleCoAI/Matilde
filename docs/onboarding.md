@@ -25,7 +25,7 @@ bind-mounted into the container at `/opt/data` (`HERMES_HOME`).
    │  {{IMAGE}}                    │   ───▶  │  = /opt/data — a directory you own    │
    │                               │         │                                       │
    │  • Hermes runtime             │         │  • {{PACKAGE_NAME}}/  ← git clone of  │
-   │  • System dependencies /      │         │      THIS repo (engine/, plugin,      │
+   │  • System dependencies /      │         │      THIS repo (plugin+engine,        │
    │    domain-specific binaries   │         │      collectors/, skill, docs)        │
    │    ({{DOMAIN_BINARIES}})      │         │                                       │
    │                               │         │  • skills/       ← operator skills   │
@@ -110,7 +110,7 @@ tells you if it is missing.
 **What's in `.env`** — your API keys for any external services this package uses. The
 `.env` file is git-ignored; never commit it. The list of required keys is in
 `docker/instance-setup.sh` and in the `requires_env` block of
-`hermes-plugin/plugin.yaml`. See `.env.example` for the full set with descriptions.
+`matilde_plugin/plugin.yaml`. See `.env.example` for the full set with descriptions.
 
 ---
 
@@ -124,7 +124,7 @@ conflicting state.
 
 The data layout is identical to standalone. What changes is the orchestrator:
 
-- **Enable the plugin** via the HSM UI or API. HSM reads `hermes-plugin/plugin.yaml`
+- **Enable the plugin** via the HSM UI or API. HSM reads `matilde_plugin/plugin.yaml`
   and surfaces the capability toggle.
 - **Environment / API keys** go into the HSM env store (encrypted). They are injected
   at container start. The `requires_env` keys declared in `plugin.yaml` are what HSM

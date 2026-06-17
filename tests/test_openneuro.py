@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
 
-from engine.openneuro import (  # noqa: E402
+from matilde_plugin.engine.openneuro import (  # noqa: E402
     Dataset,
     OpenNeuroError,
     download_file,

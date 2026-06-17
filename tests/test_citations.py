@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
 
-from engine.citations import (  # noqa: E402
+from matilde_plugin.engine.citations import (  # noqa: E402
     AxisResult,
     Reference,
     VerificationResult,
@@ -309,7 +309,7 @@ def test_openalex_to_record_normalizes_to_crossref_shape():
 def test_retraction_via_openalex_is_retracted_flag():
     retracted_oa = dict(OPENALEX_ATTENTION, is_retracted=True)
     rec = _openalex_to_record(retracted_oa)
-    from engine.citations import _retraction_signal
+    from matilde_plugin.engine.citations import _retraction_signal
     assert _retraction_signal(rec) is not None
 
 
