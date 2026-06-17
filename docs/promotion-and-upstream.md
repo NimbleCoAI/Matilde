@@ -32,7 +32,8 @@ together for a single job. That's where it should live until it has earned
 generalization.
 
 **Promote when it has proven useful across multiple {{DOMAIN_NOUN}}s.** One use
-is an anecdote. Three is a method.
+is an anecdote. Three is a method. The bar is repeatability, not perfection —
+if the technique only worked once, it hasn't earned generalization yet.
 
 ### How to promote
 
