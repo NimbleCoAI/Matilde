@@ -24,8 +24,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install semantic-layer dep
-        run: pip install anthropic
+      - name: Install deps (semantic layer + self-tests)
+        run: pip install anthropic pytest
 
       - name: Scanner self-tests (deterministic, no key needed)
         run: python -m pytest tests/test_check_sanitization.py -q
