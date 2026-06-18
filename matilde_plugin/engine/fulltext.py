@@ -106,6 +106,25 @@ def _arxiv_pdf(doi: str) -> str:
     return f"https://arxiv.org/pdf/{m.group(1)}" if m else ""
 
 
+def _try_external_resolver(doi: str, fetch: FetchFn, resolver_url: str) -> str:
+    """Ask a configured external full-text resolver for a PDF URL.
+
+    This is a provider-neutral extension point: ``resolver_url`` points at a
+    self-hosted or third-party service implementing the contract
+    ``GET {resolver_url}/resolve?doi={doi} -> {"pdf_url": "...", ...}``. This
+    package ships no such service and names no provider — the operator supplies
+    one out of band (an institutional proxy, a paid API, anything). Consulted
+    only after every legal open-access lookup has missed.
+    """
+    base = resolver_url.rstrip("/")
+    doi_q = urllib.parse.quote(doi, safe="")
+    try:
+        data = fetch(f"{base}/resolve?doi={doi_q}")
+    except Exception:
+        return ""
+    return (data or {}).get("pdf_url") or ""
+
+
 # ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
@@ -127,13 +146,20 @@ def _from_loc(doi: str, loc: dict, source: str) -> FullTextResult:
 
 
 def find_open_access(doi: str, fetch: Optional[FetchFn] = None, *,
-                     email: Optional[str] = None) -> FullTextResult:
-    """Resolve the best legal open-access location for *doi*.
+                     email: Optional[str] = None,
+                     resolver_url: Optional[str] = None) -> FullTextResult:
+    """Resolve the best full-text location for *doi*, preferring legal open access.
 
-    Returns a :class:`FullTextResult`. ``is_oa=False`` means no open-access copy
-    was found — the work is paywalled and this locator will not route around it.
-    Pass *email* to enable the Unpaywall lookup (its API requires a contact
-    address); without it, only OpenAlex + arXiv are consulted.
+    Returns a :class:`FullTextResult`. Legal open-access sources are tried first
+    (OpenAlex, then Unpaywall if *email* is given, then an arXiv-DOI synthesis).
+    ``is_oa=False`` means no open-access copy was found.
+
+    If — and only if — every OA lookup misses and *resolver_url* is configured,
+    a provider-neutral external resolver is consulted as a last resort. A hit
+    there populates the full-text URL but keeps ``is_oa=False`` and
+    ``source="external-resolver"``: it is full text, not open access, and the
+    result says so. A legal OA copy always wins, so a configured resolver is
+    never consulted when an open-access copy exists.
     """
     fetch = fetch or default_fetch
     doi = _normalize_doi(doi)
@@ -160,5 +186,16 @@ def find_open_access(doi: str, fetch: Optional[FetchFn] = None, *,
     if arx:
         return _from_loc(doi, {"pdf_url": arx, "oa_status": "green",
                                "host_type": "repository"}, "arxiv")
+
+    # 4. External resolver (opt-in, last resort) — full text, NOT open access.
+    if resolver_url:
+        pdf = _try_external_resolver(doi, fetch, resolver_url)
+        if pdf:
+            result.pdf_url = pdf
+            result.best_url = pdf
+            result.source = "external-resolver"
+            result.candidates = [{"url": pdf, "pdf_url": pdf, "landing_url": "",
+                                  "license": "", "version": "", "host_type": "",
+                                  "source": "external-resolver"}]
 
     return result

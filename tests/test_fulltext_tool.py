@@ -56,3 +56,32 @@ def test_handler_never_raises_on_engine_error(monkeypatch):
     out = json.loads(_handle_fetch_fulltext({"doi": "10.1234/x"}))
     assert out["success"] is False
     assert "fetch_fulltext failed" in out["error"]
+
+
+def test_handler_forwards_resolver_url_from_env(monkeypatch):
+    captured = {}
+
+    def capture(doi, **kwargs):
+        captured.update(kwargs)
+        return ft.FullTextResult(doi=doi)
+
+    monkeypatch.setattr(ft, "find_open_access", capture)
+    monkeypatch.setenv("MATILDE_FULLTEXT_RESOLVER_URL", "https://resolver.example.net")
+
+    _handle_fetch_fulltext({"doi": "10.1234/x"})
+    assert captured.get("resolver_url") == "https://resolver.example.net"
+
+
+def test_handler_message_flags_external_as_not_open_access(monkeypatch):
+    fake = ft.FullTextResult(
+        doi="10.1234/x", is_oa=False, oa_status="closed",
+        best_url="https://resolver/x.pdf", pdf_url="https://resolver/x.pdf",
+        source="external-resolver",
+    )
+    monkeypatch.setattr(ft, "find_open_access", lambda *a, **k: fake)
+
+    out = json.loads(_handle_fetch_fulltext({"doi": "10.1234/x"}))
+    assert out["success"] is True
+    assert out["pdf_url"] == "https://resolver/x.pdf"
+    assert out["is_oa"] is False
+    assert "not open access" in out["message"].lower()
