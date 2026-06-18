@@ -55,10 +55,12 @@ score and an evidence trail, never a false certainty.
 | `matilde_openneuro_dataset_info` | Metadata for an OpenNeuro dataset (title, authors, modalities, subjects, tasks, size) |
 | `matilde_openneuro_search` | List OpenNeuro dataset IDs to discover brain-imaging datasets |
 | `matilde_openneuro_list_files` | List a dataset's files with sizes and direct download URLs |
+| `matilde_fetch_fulltext` | Resolve the best **legal open-access** full text for a DOI (PDF or OA landing) via OpenAlex/Unpaywall/arXiv — for grounding a claim against the source, not just its metadata. Never routes around a paywall |
 
-No API keys required — Crossref, OpenAlex, and DataCite are free and
-unauthenticated. Optionally set `MATILDE_CONTACT_EMAIL` to join the providers'
-polite pools.
+No API keys required — Crossref, OpenAlex, DataCite, and the open-access
+providers (OpenAlex, Unpaywall, arXiv) are free. Optionally set
+`MATILDE_CONTACT_EMAIL` to join the providers' polite pools and enable the
+Unpaywall lookup (which widens open-access coverage).
 
 ## Try it
 

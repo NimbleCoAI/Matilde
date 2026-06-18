@@ -82,11 +82,26 @@ For a fast retraction-only check by DOI:
 matilde_check_retraction(doi="10.1016/...")
 ```
 
+To read the actual paper — to ground a claim against what the source really
+says — resolve its **legal open-access** full text by DOI:
+
+```
+matilde_fetch_fulltext(doi="10.7554/eLife.00013")
+```
+
+It returns the best open-access location (a direct PDF where one exists, else an
+OA landing page) from OpenAlex / Unpaywall / arXiv, with `is_oa`, `oa_status`,
+and license. If no open-access copy exists, `is_oa` is false and no URL is
+returned — it surfaces only legal OA sources and will not route around a
+paywall. Set `MATILDE_CONTACT_EMAIL` to widen coverage via Unpaywall. When the
+result gives a URL, fetch and read it with your general research/file tools.
+
 **Interpreting axes honestly.** A `verified` verdict means *checked against
 authoritative metadata* — existence, identity, retraction status. It does **not**
 mean the cited passage actually supports the claim it is attached to. That deeper
-check (claim-support grounding) is not yet automated; when it matters, read the
-source and confirm the passage yourself, and say that you did.
+check (claim-support grounding) is not yet automated; when it matters, pull the
+source with `matilde_fetch_fulltext`, read the passage, confirm it yourself, and
+say that you did.
 
 ### Phase 4: Synthesize
 

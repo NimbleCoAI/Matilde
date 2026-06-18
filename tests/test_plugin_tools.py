@@ -34,6 +34,7 @@ def test_plugin_registers_expected_tools():
         "matilde_openneuro_dataset_info",
         "matilde_openneuro_search",
         "matilde_openneuro_list_files",
+        "matilde_fetch_fulltext",
     ]
 
 
