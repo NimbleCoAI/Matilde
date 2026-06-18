@@ -370,3 +370,55 @@ def _handle_openneuro_list_files(args: dict, **kwargs: Any) -> str:
         )
     except Exception as exc:
         return _tool_error(f"openneuro_list_files failed: {type(exc).__name__}: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Tool: open-access full-text locator
+# ---------------------------------------------------------------------------
+
+FETCH_FULLTEXT_SCHEMA = {
+    "name": "matilde_fetch_fulltext",
+    "description": (
+        "Find the best *legal open-access* full-text location for a paper by DOI "
+        "— a direct PDF where one exists, else an OA landing page — using OpenAlex, "
+        "Unpaywall, and arXiv. Use this to retrieve the actual paper content so a "
+        "claim can be grounded against the source, not just its metadata. Returns "
+        "is_oa, oa_status (gold/green/hybrid/bronze/closed), pdf_url, landing_url, "
+        "license, and the provider. If no open-access copy exists, is_oa is false "
+        "and no URL is returned — this tool only surfaces legal OA sources and will "
+        "not route around a paywall. Set MATILDE_CONTACT_EMAIL (or pass 'email') to "
+        "enable the Unpaywall lookup, which widens coverage."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "doi": {"type": "string", "description": "DOI of the work (bare, or as a doi.org URL)."},
+            "email": {"type": "string", "description": "Contact email to enable the Unpaywall lookup (optional; falls back to MATILDE_CONTACT_EMAIL)."},
+        },
+        "required": ["doi"],
+    },
+}
+
+
+def _handle_fetch_fulltext(args: dict, **kwargs: Any) -> str:
+    doi = str(args.get("doi", "")).strip()
+    if not doi:
+        return _tool_error("'doi' is required (bare or doi.org URL).")
+    try:
+        import os
+        from .engine.fulltext import find_open_access
+        email = (str(args.get("email", "")).strip()
+                 or os.environ.get("MATILDE_CONTACT_EMAIL", "").strip()
+                 or None)
+        res = find_open_access(doi, email=email)
+        payload = res.to_dict()
+        if res.is_oa:
+            payload["message"] = (f"Open access ({res.oa_status}) via {res.source}: "
+                                  f"{res.best_url}")
+        else:
+            payload["message"] = (f"No open-access copy found for {res.doi} "
+                                  f"(status: {res.oa_status}). Matilde returns only "
+                                  f"legal OA sources.")
+        return _tool_result(payload)
+    except Exception as exc:
+        return _tool_error(f"fetch_fulltext failed: {type(exc).__name__}: {exc}")

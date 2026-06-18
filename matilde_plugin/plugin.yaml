@@ -11,7 +11,7 @@ name: "matilde"
 
 version: "0.1.0"
 
-description: "Matilde — academic research assistant: verifiable citations (Crossref/OpenAlex/DataCite + retraction) and OpenNeuro/BIDS dataset discovery."
+description: "Matilde — academic research assistant: verifiable citations (Crossref/OpenAlex/DataCite + retraction), legal open-access full-text retrieval (OpenAlex/Unpaywall/arXiv), and OpenNeuro/BIDS dataset discovery."
 
 author: "NimbleCoAI"
 
@@ -28,3 +28,4 @@ provides_tools:
   - "matilde_openneuro_dataset_info"
   - "matilde_openneuro_search"
   - "matilde_openneuro_list_files"
+  - "matilde_fetch_fulltext"

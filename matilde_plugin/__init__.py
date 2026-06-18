@@ -54,6 +54,7 @@ CHECK_RETRACTION_SCHEMA = _tools_mod.CHECK_RETRACTION_SCHEMA
 OPENNEURO_INFO_SCHEMA = _tools_mod.OPENNEURO_INFO_SCHEMA
 OPENNEURO_SEARCH_SCHEMA = _tools_mod.OPENNEURO_SEARCH_SCHEMA
 OPENNEURO_FILES_SCHEMA = _tools_mod.OPENNEURO_FILES_SCHEMA
+FETCH_FULLTEXT_SCHEMA = _tools_mod.FETCH_FULLTEXT_SCHEMA
 _check_available = _tools_mod._check_available
 _handle_verify_citation = _tools_mod._handle_verify_citation
 _handle_verify_bibliography = _tools_mod._handle_verify_bibliography
@@ -61,6 +62,7 @@ _handle_check_retraction = _tools_mod._handle_check_retraction
 _handle_openneuro_dataset_info = _tools_mod._handle_openneuro_dataset_info
 _handle_openneuro_search = _tools_mod._handle_openneuro_search
 _handle_openneuro_list_files = _tools_mod._handle_openneuro_list_files
+_handle_fetch_fulltext = _tools_mod._handle_fetch_fulltext
 
 # ---------------------------------------------------------------------------
 # Tool registry — (tool_name, schema, handler, emoji)
@@ -72,6 +74,7 @@ _TOOLS = (
     ("matilde_openneuro_dataset_info", OPENNEURO_INFO_SCHEMA, _handle_openneuro_dataset_info, "🧠"),
     ("matilde_openneuro_search", OPENNEURO_SEARCH_SCHEMA, _handle_openneuro_search, "🔎"),
     ("matilde_openneuro_list_files", OPENNEURO_FILES_SCHEMA, _handle_openneuro_list_files, "🗂"),
+    ("matilde_fetch_fulltext", FETCH_FULLTEXT_SCHEMA, _handle_fetch_fulltext, "📄"),
 )
 
 
