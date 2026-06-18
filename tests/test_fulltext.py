@@ -169,6 +169,63 @@ def test_arxiv_doi_synthesizes_pdf_url_when_providers_miss():
 
 
 # ---------------------------------------------------------------------------
+# External resolver hook (provider-neutral; opt-in via resolver_url)
+# ---------------------------------------------------------------------------
+
+# A configured external resolver answers with a full-text URL for a paywalled
+# work. Its OA status is unknown/none — the result must NOT claim open access.
+EXTERNAL_HIT = {"pdf_url": "https://resolver.example.net/files/closed-paper.pdf"}
+
+
+def test_external_resolver_used_when_oa_misses():
+    fetch = make_fetch({
+        "api.openalex.org": OPENALEX_CLOSED,
+        "resolver.example.net": EXTERNAL_HIT,
+    })
+    res = find_open_access("10.1234/closed-paper", fetch=fetch,
+                           resolver_url="https://resolver.example.net")
+    assert res.best_url == "https://resolver.example.net/files/closed-paper.pdf"
+    assert res.pdf_url == "https://resolver.example.net/files/closed-paper.pdf"
+    assert res.source == "external-resolver"
+    # Honesty: an external resolver is NOT open access — don't mislabel it.
+    assert res.is_oa is False
+
+
+def test_external_resolver_skipped_when_unset():
+    fetch = make_fetch({
+        "api.openalex.org": OPENALEX_CLOSED,
+        "resolver.example.net": EXTERNAL_HIT,
+    })
+    res = find_open_access("10.1234/closed-paper", fetch=fetch, resolver_url=None)
+    assert res.best_url == ""
+    assert not any("resolver.example.net" in u for u in fetch.calls)
+
+
+def test_external_resolver_not_consulted_when_legal_oa_exists():
+    # The legal OA copy wins; the external resolver (maybe Sci-Hub) is never hit.
+    fetch = make_fetch({
+        "api.openalex.org": OPENALEX_OA,
+        "resolver.example.net": EXTERNAL_HIT,
+    })
+    res = find_open_access("10.1234/oa-paper", fetch=fetch,
+                           resolver_url="https://resolver.example.net")
+    assert res.source == "openalex"
+    assert res.is_oa is True
+    assert not any("resolver.example.net" in u for u in fetch.calls)
+
+
+def test_external_resolver_miss_falls_through_to_closed():
+    fetch = make_fetch({
+        "api.openalex.org": OPENALEX_CLOSED,
+        "resolver.example.net": {"pdf_url": None},
+    })
+    res = find_open_access("10.1234/closed-paper", fetch=fetch,
+                           resolver_url="https://resolver.example.net")
+    assert res.best_url == ""
+    assert res.is_oa is False
+
+
+# ---------------------------------------------------------------------------
 # DOI normalization
 # ---------------------------------------------------------------------------
 

@@ -384,16 +384,20 @@ FETCH_FULLTEXT_SCHEMA = {
         "Unpaywall, and arXiv. Use this to retrieve the actual paper content so a "
         "claim can be grounded against the source, not just its metadata. Returns "
         "is_oa, oa_status (gold/green/hybrid/bronze/closed), pdf_url, landing_url, "
-        "license, and the provider. If no open-access copy exists, is_oa is false "
-        "and no URL is returned — this tool only surfaces legal OA sources and will "
-        "not route around a paywall. Set MATILDE_CONTACT_EMAIL (or pass 'email') to "
-        "enable the Unpaywall lookup, which widens coverage."
+        "license, and the provider. If no open-access copy exists, is_oa is false. "
+        "Set MATILDE_CONTACT_EMAIL (or pass 'email') to enable the Unpaywall lookup, "
+        "which widens coverage. If an external full-text resolver is configured "
+        "(MATILDE_FULLTEXT_RESOLVER_URL or 'resolver_url'), it is consulted only as "
+        "a last resort after every open-access lookup misses; such a result is "
+        "flagged is_oa=false with source 'external-resolver' — it is full text, not "
+        "open access, so confirm you have the right to access it."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "doi": {"type": "string", "description": "DOI of the work (bare, or as a doi.org URL)."},
             "email": {"type": "string", "description": "Contact email to enable the Unpaywall lookup (optional; falls back to MATILDE_CONTACT_EMAIL)."},
+            "resolver_url": {"type": "string", "description": "Base URL of an external full-text resolver to use as a last resort (optional; falls back to MATILDE_FULLTEXT_RESOLVER_URL). Off unless configured."},
         },
         "required": ["doi"],
     },
@@ -410,15 +414,22 @@ def _handle_fetch_fulltext(args: dict, **kwargs: Any) -> str:
         email = (str(args.get("email", "")).strip()
                  or os.environ.get("MATILDE_CONTACT_EMAIL", "").strip()
                  or None)
-        res = find_open_access(doi, email=email)
+        resolver_url = (str(args.get("resolver_url", "")).strip()
+                        or os.environ.get("MATILDE_FULLTEXT_RESOLVER_URL", "").strip()
+                        or None)
+        res = find_open_access(doi, email=email, resolver_url=resolver_url)
         payload = res.to_dict()
         if res.is_oa:
             payload["message"] = (f"Open access ({res.oa_status}) via {res.source}: "
                                   f"{res.best_url}")
+        elif res.best_url:
+            # Full text via a configured external resolver — NOT open access.
+            payload["message"] = (f"Full text via {res.source} (NOT open access — "
+                                  f"verify you have the right to access it): "
+                                  f"{res.best_url}")
         else:
             payload["message"] = (f"No open-access copy found for {res.doi} "
-                                  f"(status: {res.oa_status}). Matilde returns only "
-                                  f"legal OA sources.")
+                                  f"(status: {res.oa_status}).")
         return _tool_result(payload)
     except Exception as exc:
         return _tool_error(f"fetch_fulltext failed: {type(exc).__name__}: {exc}")

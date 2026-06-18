@@ -62,6 +62,23 @@ providers (OpenAlex, Unpaywall, arXiv) are free. Optionally set
 `MATILDE_CONTACT_EMAIL` to join the providers' polite pools and enable the
 Unpaywall lookup (which widens open-access coverage).
 
+### Optional: an external full-text resolver
+
+`matilde_fetch_fulltext` has a provider-neutral extension point. If you set
+`MATILDE_FULLTEXT_RESOLVER_URL`, then **only when every open-access lookup has
+missed**, Matilde will ask that endpoint for a full-text URL:
+
+```
+GET {MATILDE_FULLTEXT_RESOLVER_URL}/resolve?doi=<doi>  ->  {"pdf_url": "..."}
+```
+
+This package ships no such service and names no provider — you supply one out of
+band (an institutional/library proxy, a licensed full-text API, a self-hosted
+service). A result obtained this way is reported with `is_oa: false` and
+`source: "external-resolver"`: it is full text, **not** open access, and you are
+responsible for having the right to access it. Leave the variable unset and the
+behaviour never engages.
+
 ## Try it
 
 ```python
