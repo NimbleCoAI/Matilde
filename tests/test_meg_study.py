@@ -335,6 +335,17 @@ def test_out_of_window_peak_from_enough_epochs_still_refuted(store):
     assert not f["evidence"].get("next_step")
 
 
+def test_min_reliable_epochs_boundary_is_inclusive(store):
+    # Exactly MIN_RELIABLE_EPOCHS is "reliable" (the gate is `< threshold`), so an
+    # out-of-window peak at the boundary is a real refutation, not a downgrade.
+    sid = store.create_study(slug="meg-edge", title="edge", plan=_plan())
+    io = FakeMegIO(peak_latency_ms=300.0, n_epochs=MIN_RELIABLE_EPOCHS)
+    run(store, sid, build_steps(dataset_id="bst_auditory", io=io))
+    f = store.get_findings(sid)[0]
+    assert f["verdict"] == "refuted"
+    assert f["evidence"]["caveats"] == []
+
+
 def test_finding_evidence_carries_diagnostics(store):
     # A correct (supported) finding still surfaces the material an agent needs to
     # sanity-check it: the search window, the channel, epoch count, caveats list.
