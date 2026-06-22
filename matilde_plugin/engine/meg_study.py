@@ -88,6 +88,16 @@ _REFUTE_MARGIN_MS = 50.0
 # artifact (~15 ms) instead of the in-window auditory peak (~100-120 ms).
 _PEAK_SEARCH_MARGIN_MS = 10.0
 
+# Below this many epochs the evoked average is noise-dominated, so an out-of-
+# window (or absent) peak is more likely a weak-sample artifact than a real
+# refutation. We therefore WITHHOLD a confident ``refuted`` under this count and
+# return ``inconclusive`` with a stated next step instead (#14 skepticism: a
+# result that contradicts a well-established finding — e.g. a missing M100 in a
+# dataset famous for it — is a red flag to inspect, not to accept). A genuine
+# bst_auditory standards average has dozens of epochs; a handful means the crop
+# was too small. Tune conservatively — this only gates the *refuted* downgrade.
+MIN_RELIABLE_EPOCHS = 8
+
 
 def _peak_search_bounds(window_ms: Tuple[float, float],
                         times_lo: float, times_hi: float) -> Tuple[float, float]:
@@ -259,7 +269,10 @@ class _MneIO:
         ch, latency_s, amp = ev.get_peak(tmin=lo, tmax=hi, mode="abs",
                                          return_amplitude=True)
         return {"latency_ms": float(latency_s) * 1000.0,
-                "amplitude": float(amp), "n_epochs": n_epochs, "channel": ch}
+                "amplitude": float(amp), "n_epochs": n_epochs, "channel": ch,
+                # The actual in-window search bounds (ms) used for this peak — a
+                # diagnostic so the verdict's provenance is inspectable (#14).
+                "search_ms": [lo * 1000.0, hi * 1000.0]}
 
 
 # ---------------------------------------------------------------------------
@@ -349,19 +362,49 @@ def _validate_finding_step(io: Any, dataset_id: str,
             window_ms=window_ms)
         latency = peak.get("latency_ms")
         amplitude = peak.get("amplitude")
+        n_epochs = peak.get("n_epochs")
         verdict = _classify(latency, window_ms)
+
+        # Skepticism layer (#14): surface the material an agent needs to sanity-
+        # check the number, and refuse to report a *confident* refutation drawn
+        # from too thin a sample. A `refuted` that rests on a noise-dominated
+        # average (few epochs, or no measurable amplitude) is downgraded to
+        # `inconclusive` with a next step — never silently accepted.
+        caveats: List[str] = []
+        next_step = None
+        low_evidence = isinstance(n_epochs, int) and n_epochs < MIN_RELIABLE_EPOCHS
+        if low_evidence:
+            caveats.append(
+                f"low_evidence: {n_epochs} epochs is below the reliable "
+                f"threshold ({MIN_RELIABLE_EPOCHS}); the evoked average is "
+                f"noise-dominated and a single peak number is not yet trustworthy")
+        if verdict == "refuted" and (low_evidence or amplitude is None):
+            verdict = "inconclusive"
+            next_step = (
+                "Refutation withheld on weak evidence: a missing or displaced "
+                "M100 in a dataset known for it is more likely too few epochs "
+                "than a real absence. Increase the sample (more epochs / a "
+                "larger crop) and re-run, or inspect the evoked intermediate, "
+                "before concluding refuted.")
+
         claim = (f"auditory M100 peak for {dataset_id} falls within "
                  f"{window_ms[0]:.0f}-{window_ms[1]:.0f} ms")
+        evidence = {
+            "latency_ms": latency,
+            "amplitude": amplitude,
+            "expected_window_ms": list(window_ms),
+            "search_window_ms": peak.get("search_ms"),
+            "channel": peak.get("channel"),
+            "n_epochs": n_epochs,
+            "caveats": caveats,
+        }
+        if next_step:
+            evidence["next_step"] = next_step
         finding = {
             "claim": claim,
             "verdict": verdict,
             "score": None,
-            "evidence": {
-                "latency_ms": latency,
-                "amplitude": amplitude,
-                "expected_window_ms": list(window_ms),
-                "n_epochs": peak.get("n_epochs"),
-            },
+            "evidence": evidence,
         }
         return StepResult(data={"verdict": verdict, "latency_ms": latency,
                                 "amplitude": amplitude},
@@ -397,3 +440,82 @@ def build_steps(*, dataset_id: str = "bst_auditory",
         _evoked_step(io),
         _validate_finding_step(io, dataset_id, window),
     ]
+
+
+# ---------------------------------------------------------------------------
+# Golden recipe (#14): a shipped, offline, dependency-free worked example.
+#
+# The real study needs mne + a multi-GB download; that is the wrong thing to run
+# in CI or to point a fresh agent at as "what correct looks like." The golden
+# recipe runs the SAME five-step pipeline and the SAME verdict/skepticism logic
+# against a synthetic backend that plants a known in-window M100 — deterministic,
+# stdlib-only, instant. It doubles as a regression smoke test and a reference the
+# agent can imitate. See docs/golden-validation-recipe.md.
+# ---------------------------------------------------------------------------
+
+GOLDEN_DATASET_ID = "synthetic-golden"
+GOLDEN_PEAK_MS = 100.0          # planted peak latency — squarely inside 80-120
+GOLDEN_N_EPOCHS = 40            # a healthy, reliable epoch count
+
+
+class SyntheticMegIO:
+    """A real, dependency-free MEG backend that plants a known M100 peak.
+
+    Mirrors the :class:`MegIO` contract exactly, but fabricates small dict
+    handles instead of touching mne / numpy / the filesystem / the network — so
+    the full study runs deterministically and instantly. The planted peak
+    (``peak_latency_ms``, default :data:`GOLDEN_PEAK_MS`) sits inside the default
+    80-120 ms window with a healthy epoch count, so a correct pipeline yields
+    ``supported``. The parameters let a test also plant an out-of-window or
+    thin-sample peak to exercise the skepticism path.
+    """
+
+    def __init__(self, *, peak_latency_ms: float = GOLDEN_PEAK_MS,
+                 peak_amp: float = 4.2e-13, n_epochs: int = GOLDEN_N_EPOCHS):
+        self.peak_latency_ms = float(peak_latency_ms)
+        self.peak_amp = float(peak_amp)
+        self.n_epochs = int(n_epochs)
+
+    def fetch_sample(self, *, dataset_id: str, bounds: dict) -> dict:
+        return {"dataset_id": dataset_id, "bounds": dict(bounds),
+                "path": f"synthetic://{dataset_id}/raw"}
+
+    def preprocess(self, raw_handle: dict, *, l_freq: float, h_freq: float) -> dict:
+        return {**raw_handle, "filtered": [l_freq, h_freq],
+                "path": "synthetic://filtered"}
+
+    def epoch(self, filtered_handle: dict, *, tmin: float, tmax: float,
+              event_id: Any = None) -> dict:
+        return {**filtered_handle, "n_epochs": self.n_epochs,
+                "window": [tmin, tmax], "event_id": event_id,
+                "path": "synthetic://epochs"}
+
+    def evoked(self, epochs_handle: dict) -> dict:
+        return {**epochs_handle, "averaged": True, "path": "synthetic://evoked"}
+
+    def measure_peak(self, evoked_handle: dict, *,
+                     window_ms: Tuple[float, float]) -> dict:
+        if self.n_epochs <= 0:
+            return {"latency_ms": None, "amplitude": None, "n_epochs": 0,
+                    "channel": None, "search_ms": list(window_ms)}
+        lo, hi = _peak_search_bounds(window_ms, -0.1, 0.3)
+        return {"latency_ms": self.peak_latency_ms, "amplitude": self.peak_amp,
+                "n_epochs": self.n_epochs, "channel": "MEG 1631",
+                "search_ms": [lo * 1000.0, hi * 1000.0]}
+
+
+def build_golden_steps(*, peak_latency_ms: float = GOLDEN_PEAK_MS,
+                       n_epochs: int = GOLDEN_N_EPOCHS,
+                       expected_window_ms: Tuple[float, float] = DEFAULT_WINDOW_MS
+                       ) -> List[Step]:
+    """Build the offline *golden* meg_validation pipeline (synthetic backend).
+
+    No mne / numpy / network — a fully deterministic worked example that yields
+    ``supported`` for a planted in-window M100. Doubles as the package's smoke
+    test and the reference recipe (see docs/golden-validation-recipe.md). The
+    defaults plant a correct peak; override ``peak_latency_ms`` / ``n_epochs`` to
+    demonstrate the refuted / skeptical-inconclusive paths.
+    """
+    io = SyntheticMegIO(peak_latency_ms=peak_latency_ms, n_epochs=n_epochs)
+    return build_steps(dataset_id=GOLDEN_DATASET_ID, io=io,
+                       expected_window_ms=expected_window_ms)

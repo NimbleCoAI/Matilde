@@ -509,7 +509,7 @@ STUDY_CREATE_SCHEMA = {
             "title": {"type": "string", "description": "Human-readable title."},
             "plan": {"type": "array", "items": {"type": "string"},
                      "description": "Ordered step names (e.g. ['parse_refs','verify_each','summarize'])."},
-            "kind": {"type": "string", "description": "Optional study kind. 'bibliography' wires the built-in reference-validation steps; 'meg_validation' wires the memory-bounded MEG evoked-peak (M100) validation steps."},
+            "kind": {"type": "string", "description": "Optional study kind. 'bibliography' wires the built-in reference-validation steps; 'meg_validation' wires the memory-bounded MEG evoked-peak (M100) validation steps; 'golden_meg_validation' runs the offline, dependency-free worked example (a planted in-window M100 -> 'supported') — the self-demonstrating reference recipe, no mne or download needed."},
             "bibtex": {"type": "string", "description": "For kind='bibliography': the BibTeX to validate (stored on the study)."},
             "dataset_id": {"type": "string", "description": "For kind='meg_validation': the open MEG dataset to validate against (e.g. 'bst_auditory')."},
             "expected_window_ms": {"type": "array", "items": {"type": "number"}, "description": "For kind='meg_validation': the [low, high] expected peak-latency window in ms (default [80, 120] for the auditory M100)."},
@@ -531,7 +531,7 @@ def _handle_study_create(args: dict, **kwargs: Any) -> str:
         bibtex = args.get("bibtex")
         if kind == "bibliography" and not plan:
             plan = ["parse_refs", "verify_each", "summarize"]
-        if kind == "meg_validation" and not plan:
+        if kind in ("meg_validation", "golden_meg_validation") and not plan:
             plan = ["fetch_sample", "preprocess", "epoch", "evoked",
                     "validate_finding"]
         meta: dict = {}
@@ -600,6 +600,12 @@ def _handle_study_run(args: dict, **kwargs: Any) -> str:
         if kind == "bibliography":
             from .engine.bibliography_study import build_steps
             steps = build_steps(bibtex=meta.get("bibtex", ""))
+        elif kind == "golden_meg_validation":
+            # Offline, dependency-free worked example — plants a known in-window
+            # M100 and yields `supported`. The self-demonstrating reference
+            # recipe; needs no mne / download (docs/golden-validation-recipe.md).
+            from .engine import meg_study
+            steps = meg_study.build_golden_steps()
         elif kind == "meg_validation":
             from .engine import meg_study
             window = meta.get("expected_window_ms") or list(
@@ -614,7 +620,8 @@ def _handle_study_run(args: dict, **kwargs: Any) -> str:
             return _tool_error(
                 f"Study {sid} has no runnable step implementations "
                 f"(kind={kind!r}). Built-in runner currently supports "
-                f"kind='bibliography' and kind='meg_validation'.", study_id=sid)
+                f"kind='bibliography', 'meg_validation', and "
+                f"'golden_meg_validation'.", study_id=sid)
         summary = run(store, sid, steps)
         return _tool_result(
             study_id=sid, status=summary["status"], steps=summary["steps"],
