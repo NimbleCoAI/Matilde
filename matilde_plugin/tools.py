@@ -479,8 +479,11 @@ STUDY_CREATE_SCHEMA = {
             "title": {"type": "string", "description": "Human-readable title."},
             "plan": {"type": "array", "items": {"type": "string"},
                      "description": "Ordered step names (e.g. ['parse_refs','verify_each','summarize'])."},
-            "kind": {"type": "string", "description": "Optional study kind. 'bibliography' wires the built-in reference-validation steps."},
+            "kind": {"type": "string", "description": "Optional study kind. 'bibliography' wires the built-in reference-validation steps; 'meg_validation' wires the memory-bounded MEG evoked-peak (M100) validation steps."},
             "bibtex": {"type": "string", "description": "For kind='bibliography': the BibTeX to validate (stored on the study)."},
+            "dataset_id": {"type": "string", "description": "For kind='meg_validation': the open MEG dataset to validate against (e.g. 'bst_auditory')."},
+            "expected_window_ms": {"type": "array", "items": {"type": "number"}, "description": "For kind='meg_validation': the [low, high] expected peak-latency window in ms (default [80, 120] for the auditory M100)."},
+            "bounds": {"type": "object", "description": "For kind='meg_validation': sample-bounding overrides (run, max_channels, crop_tmax, resample_hz, l_freq, h_freq, tmin, tmax) keeping the loaded slice small."},
         },
         "required": ["slug"],
     },
@@ -498,11 +501,27 @@ def _handle_study_create(args: dict, **kwargs: Any) -> str:
         bibtex = args.get("bibtex")
         if kind == "bibliography" and not plan:
             plan = ["parse_refs", "verify_each", "summarize"]
+        if kind == "meg_validation" and not plan:
+            plan = ["fetch_sample", "preprocess", "epoch", "evoked",
+                    "validate_finding"]
         meta: dict = {}
         if kind:
             meta["kind"] = kind
         if isinstance(bibtex, str) and bibtex.strip():
             meta["bibtex"] = bibtex
+        if kind == "meg_validation":
+            dsid = str(args.get("dataset_id", "")).strip() or "bst_auditory"
+            meta["dataset_id"] = dsid
+            window = args.get("expected_window_ms")
+            if isinstance(window, (list, tuple)) and len(window) == 2:
+                try:
+                    meta["expected_window_ms"] = [float(window[0]),
+                                                  float(window[1])]
+                except (TypeError, ValueError):
+                    pass
+            bounds = args.get("bounds")
+            if isinstance(bounds, dict):
+                meta["bounds"] = bounds
         store = _open_store()
         sid = store.create_study(slug=slug, title=title, plan=plan, meta=meta)
         store.add_steps(sid, plan)
@@ -551,11 +570,21 @@ def _handle_study_run(args: dict, **kwargs: Any) -> str:
         if kind == "bibliography":
             from .engine.bibliography_study import build_steps
             steps = build_steps(bibtex=meta.get("bibtex", ""))
+        elif kind == "meg_validation":
+            from .engine import meg_study
+            window = meta.get("expected_window_ms") or list(
+                meg_study.DEFAULT_WINDOW_MS)
+            # _TEST_IO is a stdlib test hook (None in production -> real lazy-mne).
+            steps = meg_study.build_steps(
+                dataset_id=meta.get("dataset_id", "bst_auditory"),
+                io=getattr(meg_study, "_TEST_IO", None),
+                expected_window_ms=(window[0], window[1]),
+                bounds=meta.get("bounds"))
         else:
             return _tool_error(
                 f"Study {sid} has no runnable step implementations "
                 f"(kind={kind!r}). Built-in runner currently supports "
-                f"kind='bibliography'.", study_id=sid)
+                f"kind='bibliography' and kind='meg_validation'.", study_id=sid)
         summary = run(store, sid, steps)
         return _tool_result(
             study_id=sid, status=summary["status"], steps=summary["steps"],
