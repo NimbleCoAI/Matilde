@@ -35,6 +35,10 @@ def test_plugin_registers_expected_tools():
         "matilde_openneuro_search",
         "matilde_openneuro_list_files",
         "matilde_fetch_fulltext",
+        "matilde_study_create",
+        "matilde_study_run",
+        "matilde_study_status",
+        "matilde_study_list",
     ]
 
 
