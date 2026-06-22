@@ -433,3 +433,215 @@ def _handle_fetch_fulltext(args: dict, **kwargs: Any) -> str:
         return _tool_result(payload)
     except Exception as exc:
         return _tool_error(f"fetch_fulltext failed: {type(exc).__name__}: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Study pipeline — durable, resumable, agent-drivable analyses
+#
+# These tools let the agent kick off / advance / inspect a long analysis without
+# holding it in a single turn. State lives in a SQLite ``StudyStore`` on the
+# mounted data volume, so an OOM or container rebuild mid-run is recovered by
+# simply calling matilde_study_run again. Logic lives in engine/store.py +
+# engine/pipeline.py; these handlers stay thin.
+# ---------------------------------------------------------------------------
+
+def _open_store() -> Any:
+    """Open the StudyStore at the injected/default on-volume db path."""
+    from .engine.store import StudyStore
+    return StudyStore()  # default_db_path() honors MATILDE_STUDY_DB / HERMES_HOME
+
+
+def _coerce_plan(plan: Any) -> list:
+    """Accept a list of step names or a comma/newline-separated string."""
+    if isinstance(plan, list):
+        return [str(p).strip() for p in plan if str(p).strip()]
+    if isinstance(plan, str):
+        sep = "," if "," in plan else "\n"
+        return [p.strip() for p in plan.split(sep) if p.strip()]
+    return []
+
+
+STUDY_CREATE_SCHEMA = {
+    "name": "matilde_study_create",
+    "description": (
+        "Create a durable, resumable study — a long analysis decomposed into "
+        "ordered steps whose state is checkpointed to disk so it survives an OOM "
+        "or container rebuild. Provide a unique 'slug', a human 'title', and a "
+        "'plan' (ordered step names). Returns the study_id. For the built-in "
+        "bibliography-validation study, set kind='bibliography' and pass 'bibtex'; "
+        "then call matilde_study_run to verify each reference. Creating with an "
+        "existing slug returns that study (idempotent)."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "slug": {"type": "string", "description": "Unique short id for the study (e.g. 'paper42-bib')."},
+            "title": {"type": "string", "description": "Human-readable title."},
+            "plan": {"type": "array", "items": {"type": "string"},
+                     "description": "Ordered step names (e.g. ['parse_refs','verify_each','summarize'])."},
+            "kind": {"type": "string", "description": "Optional study kind. 'bibliography' wires the built-in reference-validation steps."},
+            "bibtex": {"type": "string", "description": "For kind='bibliography': the BibTeX to validate (stored on the study)."},
+        },
+        "required": ["slug"],
+    },
+}
+
+
+def _handle_study_create(args: dict, **kwargs: Any) -> str:
+    slug = str(args.get("slug", "")).strip()
+    if not slug:
+        return _tool_error("'slug' is required (a unique short id for the study).")
+    try:
+        title = str(args.get("title", "")).strip() or slug
+        plan = _coerce_plan(args.get("plan"))
+        kind = str(args.get("kind", "")).strip()
+        bibtex = args.get("bibtex")
+        if kind == "bibliography" and not plan:
+            plan = ["parse_refs", "verify_each", "summarize"]
+        meta: dict = {}
+        if kind:
+            meta["kind"] = kind
+        if isinstance(bibtex, str) and bibtex.strip():
+            meta["bibtex"] = bibtex
+        store = _open_store()
+        sid = store.create_study(slug=slug, title=title, plan=plan, meta=meta)
+        store.add_steps(sid, plan)
+        return _tool_result(
+            study_id=sid, slug=slug, plan=plan,
+            message=f"Created study {sid} ('{slug}') with {len(plan)} step(s).")
+    except Exception as exc:
+        return _tool_error(f"study_create failed: {type(exc).__name__}: {exc}")
+
+
+STUDY_RUN_SCHEMA = {
+    "name": "matilde_study_run",
+    "description": (
+        "Advance a study: run its pending steps in order, checkpointing after "
+        "each. Already-completed steps are skipped, so if a previous run was "
+        "OOM-killed or the container was rebuilt mid-run, just call this again to "
+        "resume from the last completed step. Returns the study status and a "
+        "per-step summary; on a step failure the study is left 'blocked' and "
+        "resumable. For bibliography studies the BibTeX stored at create time is "
+        "used automatically."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "study_id": {"type": "integer", "description": "The study to advance (from matilde_study_create)."},
+        },
+        "required": ["study_id"],
+    },
+}
+
+
+def _handle_study_run(args: dict, **kwargs: Any) -> str:
+    sid_raw = args.get("study_id")
+    try:
+        sid = int(sid_raw)
+    except (TypeError, ValueError):
+        return _tool_error("'study_id' is required and must be an integer.")
+    try:
+        from .engine.pipeline import run
+        store = _open_store()
+        study = store.get_study(sid)
+        if study is None:
+            return _tool_error(f"No study with id {sid}.", study_id=sid)
+        meta = study.get("meta") or {}
+        kind = meta.get("kind")
+        if kind == "bibliography":
+            from .engine.bibliography_study import build_steps
+            steps = build_steps(bibtex=meta.get("bibtex", ""))
+        else:
+            return _tool_error(
+                f"Study {sid} has no runnable step implementations "
+                f"(kind={kind!r}). Built-in runner currently supports "
+                f"kind='bibliography'.", study_id=sid)
+        summary = run(store, sid, steps)
+        return _tool_result(
+            study_id=sid, status=summary["status"], steps=summary["steps"],
+            failed_step=summary.get("failed_step"),
+            message=f"Study {sid} is now '{summary['status']}'.")
+    except Exception as exc:
+        return _tool_error(f"study_run failed: {type(exc).__name__}: {exc}")
+
+
+STUDY_STATUS_SCHEMA = {
+    "name": "matilde_study_status",
+    "description": (
+        "Get the full status of a study: its steps (with per-step status), "
+        "recorded findings (claim + verdict + evidence), artifacts, and a "
+        "step-status tally. Use this to inspect progress or read out the "
+        "scientific findings after a run."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "study_id": {"type": "integer", "description": "The study to inspect."},
+        },
+        "required": ["study_id"],
+    },
+}
+
+
+def _handle_study_status(args: dict, **kwargs: Any) -> str:
+    sid_raw = args.get("study_id")
+    try:
+        sid = int(sid_raw)
+    except (TypeError, ValueError):
+        return _tool_error("'study_id' is required and must be an integer.")
+    try:
+        store = _open_store()
+        summary = store.study_summary(sid)
+        if summary is None:
+            return _tool_error(f"No study with id {sid}.", study_id=sid)
+        study = summary["study"]
+        return _tool_result(
+            study_id=sid,
+            slug=study["slug"],
+            status=study["status"],
+            steps=summary["steps"],
+            findings=summary["findings"],
+            finding_count=summary["finding_count"],
+            artifacts=summary["artifacts"],
+            step_status_counts=summary["step_status_counts"],
+            message=(f"Study {sid} ('{study['slug']}') is '{study['status']}' — "
+                     f"{summary['finding_count']} finding(s)."))
+    except Exception as exc:
+        return _tool_error(f"study_status failed: {type(exc).__name__}: {exc}")
+
+
+STUDY_LIST_SCHEMA = {
+    "name": "matilde_study_list",
+    "description": (
+        "List recent studies (most recent first) with their slug, title, and "
+        "status. Use to discover existing studies — e.g. to find one to resume "
+        "after a restart."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "limit": {"type": "integer", "description": "How many studies to return (default 20)."},
+        },
+        "required": [],
+    },
+}
+
+
+def _handle_study_list(args: dict, **kwargs: Any) -> str:
+    try:
+        limit = args.get("limit") or 20
+        try:
+            limit = max(1, min(int(limit), 200))
+        except (TypeError, ValueError):
+            limit = 20
+        store = _open_store()
+        studies = [
+            {"id": s["id"], "slug": s["slug"], "title": s["title"],
+             "status": s["status"], "updated_at": s["updated_at"]}
+            for s in store.list_studies(limit=limit)
+        ]
+        return _tool_result(
+            count=len(studies), studies=studies,
+            message=f"Listed {len(studies)} study(ies).")
+    except Exception as exc:
+        return _tool_error(f"study_list failed: {type(exc).__name__}: {exc}")
