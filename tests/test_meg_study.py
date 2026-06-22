@@ -26,6 +26,7 @@ import pytest
 sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), "..")))
 
 from matilde_plugin.engine.meg_study import (  # noqa: E402
+    MIN_RELIABLE_EPOCHS,
     MegIO,
     _peak_search_bounds,
     build_steps,
@@ -302,3 +303,45 @@ def test_live_bst_auditory_m100_bounded():
         assert f["evidence"]["latency_ms"] is not None
         assert 50.0 <= f["evidence"]["latency_ms"] <= 200.0
         assert f["verdict"] in ("supported", "refuted")
+
+
+# ---------------------------------------------------------------------------
+# Skepticism (#14): a `refuted` measured from too few epochs is not trustworthy
+# — the evoked average is noise-dominated, so a missing/displaced M100 more
+# likely reflects a weak sample than a real absence. Withhold the confident
+# refutation: return `inconclusive` with a stated next step instead.
+# ---------------------------------------------------------------------------
+
+def test_out_of_window_peak_from_few_epochs_is_inconclusive_not_refuted(store):
+    sid = store.create_study(slug="meg-weak", title="weak", plan=_plan())
+    # Peak far outside the 80-120 window, but only a handful of epochs.
+    io = FakeMegIO(peak_latency_ms=300.0, n_epochs=MIN_RELIABLE_EPOCHS - 1)
+    run(store, sid, build_steps(dataset_id="bst_auditory", io=io))
+    f = store.get_findings(sid)[0]
+    assert f["verdict"] == "inconclusive"
+    assert f["evidence"]["caveats"], "low-evidence caveat expected"
+    assert f["evidence"].get("next_step"), "a stated next step expected"
+    # The raw measurement is still reported for transparency.
+    assert f["evidence"]["latency_ms"] == 300.0
+
+
+def test_out_of_window_peak_from_enough_epochs_still_refuted(store):
+    # With a reliable epoch count, an out-of-window peak is a real refutation.
+    sid = store.create_study(slug="meg-strong", title="strong", plan=_plan())
+    io = FakeMegIO(peak_latency_ms=300.0, n_epochs=MIN_RELIABLE_EPOCHS + 5)
+    run(store, sid, build_steps(dataset_id="bst_auditory", io=io))
+    f = store.get_findings(sid)[0]
+    assert f["verdict"] == "refuted"
+    assert not f["evidence"].get("next_step")
+
+
+def test_finding_evidence_carries_diagnostics(store):
+    # A correct (supported) finding still surfaces the material an agent needs to
+    # sanity-check it: the search window, the channel, epoch count, caveats list.
+    sid = store.create_study(slug="meg-diag", title="diag", plan=_plan())
+    io = FakeMegIO(peak_latency_ms=100.0)
+    run(store, sid, build_steps(dataset_id="bst_auditory", io=io))
+    ev = store.get_findings(sid)[0]["evidence"]
+    for key in ("search_window_ms", "channel", "n_epochs", "caveats"):
+        assert key in ev, f"missing diagnostic key: {key}"
+    assert isinstance(ev["caveats"], list)

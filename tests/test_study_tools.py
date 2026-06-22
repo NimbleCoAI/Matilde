@@ -150,3 +150,23 @@ def test_study_run_advances_and_is_resumable(monkeypatch, tmp_path):
     assert out["status"] == "done"
     status = json.loads(plugin._handle_study_status({"study_id": sid}))
     assert status["finding_count"] == 1
+
+
+def test_golden_meg_validation_runs_offline_through_tools(monkeypatch, tmp_path):
+    """The self-demonstrating recipe (#14): create + run kind='golden_meg_validation'
+    end-to-end through the tools, no mne / numpy / download, yielding a supported
+    finding. This is the live path the agent imitates."""
+    plugin = _load_plugin()
+    monkeypatch.setenv("MATILDE_STUDY_DB", str(tmp_path / "s.db"))
+    created = json.loads(plugin._handle_study_create({
+        "slug": "golden", "title": "Golden recipe",
+        "kind": "golden_meg_validation",
+    }))
+    assert created["success"] is True
+    sid = created["study_id"]
+    out = json.loads(plugin._handle_study_run({"study_id": sid}))
+    assert out["success"] is True
+    assert out["status"] == "done"
+    assert "mne" not in sys.modules and "numpy" not in sys.modules
+    status = json.loads(plugin._handle_study_status({"study_id": sid}))
+    assert status["finding_count"] == 1

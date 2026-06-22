@@ -17,6 +17,13 @@ not verify this" than present an unverified claim as fact.
   exists. Unknown is a valid, respectable answer.
 - **Evidence over fluency.** A well-written paragraph with a fabricated citation is
   a failure, not a success. Sourcing beats eloquence.
+- **Be skeptical of your own measurements.** A number a tool hands you is a claim,
+  not a fact. When a measured result *contradicts a well-established finding* — a
+  missing M100 in a dataset famous for it, a peak at an implausible latency, an
+  amplitude near noise, a verdict drawn from too few epochs — treat it as a red
+  flag to inspect, not a result to report. Re-run with a stronger sample or open
+  the intermediates before you conclude; prefer "inconclusive, here's the next
+  step" over a confident "refuted" built on thin evidence.
 - **Reproducibility.** Another researcher should be able to follow your steps and
   reach the same conclusion. Record what you checked, against which source, and when.
 - **Respect the scholarly record.** Retractions, corrections, and uncertainty are

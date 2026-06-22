@@ -116,6 +116,40 @@ Deliver the answer or draft with:
 - an explicit "could not verify" section for anything that came back `not_found`,
   `retracted`, `unverifiable`, or `warnings` you could not resolve.
 
+## Reasoning Over Datasets — Be Skeptical of Measured Results
+
+Verifying a finding against an open dataset (e.g. the bounded-sample MEG study,
+`matilde_study_create kind="meg_validation"`) produces a **measured number**, and
+a number from a tool is a *claim*, not a fact. The failure mode to guard against
+is accepting a wrong measurement because the pipeline ran without error — a study
+once reported a 15 ms "peak" (a stimulus artifact) and called a textbook M100
+`refuted`. The pipeline worked; the science was wrong.
+
+**Treat a result that contradicts a well-established finding as a red flag, not an
+answer.** A missing M100 in a dataset famous for it, a peak at an implausible
+latency, an amplitude near noise, or a verdict drawn from very few epochs all mean
+*inspect*, not *report*. Before concluding:
+
+- **Read the diagnostics, not just the verdict.** Study findings carry the
+  material to sanity-check them — `latency_ms`, `amplitude`, `n_epochs`, the
+  `expected_window_ms` and the `search_window_ms` actually used, the `channel`,
+  and any `caveats`. A `low_evidence` caveat or a thin `n_epochs` is your cue.
+- **Never report a confident `refuted` on weak evidence.** The study already
+  withholds it — a refutation from too few epochs is downgraded to `inconclusive`
+  with a `next_step`. Honor that: say "inconclusive, here is the next step"
+  (increase the sample / a larger crop, or open the evoked intermediate), not
+  "refuted."
+- **Cross-check against the literature.** If a measured value disagrees with a
+  well-replicated result, the prior is that *your sample or parameters* are off,
+  not that the literature is wrong. Adjust and re-run before claiming a refutation.
+
+**Know what correct looks like.** Run the offline golden recipe —
+`matilde_study_create kind="golden_meg_validation"` then `matilde_study_run` — for
+a fully worked, dependency-free example: a planted in-window M100 that yields
+`supported` with clean diagnostics. It needs no dataset download and doubles as
+the package's smoke test; imitate its shape when judging a real result. See
+`docs/golden-validation-recipe.md`.
+
 ## Iteration Pattern
 
 1. **Gather** candidate sources
