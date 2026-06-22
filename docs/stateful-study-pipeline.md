@@ -2,17 +2,19 @@
 
 ## Motivation
 
-Long analyses — e.g. validating a paper's findings against an OpenNeuro dataset —
-currently run **inline in a single agent turn**: one-shot scripts that
+Long analyses — for example validating a paper's reported findings against an
+open dataset — tend to run **inline in a single agent turn** as one-shot
+scripts. Two failure modes follow from that:
 
-- **die on OOM** (observed 2026-06-22: a live MEG M100 validation full-preloaded a
-  2.5 GB dataset into the agent container and was OOM-killed), and
-- **lose all state when the container restarts** (the same session's analysis was
-  wiped when the agent image was rebuilt mid-run — no resume, no memory of it).
+- **Memory exhaustion** — loading a multi-gigabyte dataset into the agent's
+  process can exceed the container's memory budget and get the process killed
+  mid-analysis.
+- **Loss on restart** — if the container is recreated (deploy, rebuild, crash),
+  an in-flight analysis and its progress are gone, with no way to resume.
 
-Both failure modes have the same remedy: **durable, checkpointed analysis state**
-so an analysis resumes from the last completed step after an OOM *or* a container
-rebuild, instead of vanishing.
+Both have the same remedy: **durable, checkpointed analysis state** so an
+analysis resumes from the last completed step after a memory kill *or* a
+container restart, instead of vanishing.
 
 ## Hard requirements
 
@@ -63,6 +65,10 @@ API (all idempotent / upsert where sensible): `create_study`, `get_study`,
   first non-`done` step. Re-running a fully-done study is a no-op.
 - Idempotency contract: step fns must be safe to re-run from scratch (the runner
   only guarantees done-steps are skipped, not partial-step rollback).
+- Plan evolution: the runner only iterates the steps passed to it. If a step is
+  dropped from a later plan, its stored row is left as-is (orphaned, never
+  re-run) rather than reconciled. Fine for fixed-plan studies; a study whose
+  plan changes between runs should reconcile stored-vs-passed steps explicitly.
 
 ### Agent tools (`matilde_plugin/tools.py`)
 
@@ -83,11 +89,12 @@ assert the study is `blocked` with refs 1–2 `done`; fix the injected verifier;
 
 ### Follow-up (separate PR — heavy data analysis)
 
-**Data-validation study** (the MEG M100 case): steps `fetch_dataset →
-preprocess → epoch → evoked → validate_finding`, each **memory-bounded**
-(chunked/streamed, intermediates checkpointed as artifacts) so an OOM resumes
-from the last completed step. Requires deciding the agent container memory budget
-and where heavy deps (mne) are installed. Out of scope for the framework PR.
+**Data-validation study** (e.g. checking a reported evoked-response peak in an
+open MEG dataset): steps `fetch_dataset → preprocess → epoch → evoked →
+validate_finding`, each **memory-bounded** (chunked/streamed, intermediates
+checkpointed as artifacts) so a memory kill resumes from the last completed step.
+Requires deciding the agent container memory budget and where heavy scientific
+deps (e.g. mne) are installed. Out of scope for the framework PR.
 
 ## Testing
 
