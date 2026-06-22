@@ -82,6 +82,55 @@ def test_study_list_returns_created_studies(monkeypatch, tmp_path):
     assert "one" in slugs and "two" in slugs
 
 
+def _strict_loads(s: str):
+    """json.loads that REJECTS non-finite literals (NaN/Infinity), like the
+    strict JSON parsers a tool envelope is fed into downstream."""
+    def _reject(tok):
+        raise ValueError(f"non-finite JSON literal {tok!r}")
+    return json.loads(s, parse_constant=_reject)
+
+
+def test_study_status_returns_strict_json_for_completed_study(monkeypatch, tmp_path):
+    """Regression: a completed study's status must be a structured, strictly
+    JSON-parseable result — not an error envelope. A live measure_peak can yield
+    a non-finite float (NaN/Infinity) in a finding's evidence; json.dumps emits
+    those as bare NaN/Infinity, which is invalid JSON and made the framework
+    treat study_status as an error. The envelope must serialize them safely."""
+    plugin = _load_plugin()
+    monkeypatch.setenv("MATILDE_STUDY_DB", str(tmp_path / "s.db"))
+    from matilde_plugin.engine.store import StudyStore
+
+    created = json.loads(plugin._handle_study_create(
+        {"slug": "meg-nan", "title": "MEG NaN", "plan": ["validate_finding"]}))
+    sid = created["study_id"]
+
+    # Simulate what a real (lazy-mne) run can record: a finding whose evidence
+    # holds a non-finite float (e.g. a degenerate amplitude/latency).
+    store = StudyStore(str(tmp_path / "s.db"))
+    store.set_step_status(sid, "validate_finding", "done")
+    store.add_finding(
+        sid, "validate_finding",
+        claim="auditory M100 peak falls within 80-120 ms",
+        verdict="supported",
+        evidence={"latency_ms": 120.0, "amplitude": float("nan"),
+                  "extra": float("inf")})
+    store.set_study_status(sid, "done")
+    store.close()
+
+    raw = plugin._handle_study_status({"study_id": sid})
+    # Must parse under a STRICT parser (no bare NaN/Infinity tokens).
+    out = _strict_loads(raw)
+    assert out["success"] is True, out
+    assert "error" not in out
+    assert out["status"] == "done"
+    assert out["finding_count"] == 1
+    # The non-finite values are represented safely (None), not as bare NaN.
+    ev = out["findings"][0]["evidence"]
+    assert ev["amplitude"] is None
+    assert ev["extra"] is None
+    assert ev["latency_ms"] == 120.0
+
+
 def test_study_run_advances_and_is_resumable(monkeypatch, tmp_path):
     """End-to-end through the tools using the bibliography study. Coerces a string
     id, runs to completion, and a second run is a no-op (resume of a done study)."""

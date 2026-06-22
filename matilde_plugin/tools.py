@@ -17,6 +17,7 @@ string built by ``_tool_result`` / ``_tool_error``. They never raise.
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 # The engine lives INSIDE this plugin package (matilde_plugin/engine/), so it is
@@ -29,17 +30,46 @@ from typing import Any
 # Shared envelope helpers
 # ---------------------------------------------------------------------------
 
+def _json_safe(obj: Any) -> Any:
+    """Recursively make *obj* strict-JSON-serializable.
+
+    Non-finite floats (``NaN``/``Infinity``) are the trap: ``json.dumps`` emits
+    them as bare ``NaN``/``Infinity`` literals, which are INVALID JSON, so a
+    strict downstream parser rejects the whole envelope and treats the tool call
+    as an error (this is what made ``matilde_study_status`` fail on a real run
+    whose finding evidence held a non-finite measured value). We convert those
+    to ``None`` so the envelope is always valid JSON. Numpy scalars are handled
+    by ``default=str`` at dump time.
+    """
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
+def _dumps(payload: dict) -> str:
+    """Serialize an envelope to strictly-valid JSON (no bare NaN/Infinity)."""
+    # allow_nan=False makes any non-finite that slipped past _json_safe (e.g.
+    # inside a numpy type stringified by default=str — harmless) a hard failure
+    # rather than silent invalid output; _json_safe already neutralizes plain
+    # Python floats so this should not trigger.
+    return json.dumps(_json_safe(payload), default=str, allow_nan=False)
+
+
 def _tool_result(data: Any = None, **kwargs: Any) -> str:
     if data is not None:
         payload = data if isinstance(data, dict) else {"result": data}
     else:
         payload = kwargs
     payload.setdefault("success", True)
-    return json.dumps(payload, default=str)
+    return _dumps(payload)
 
 
 def _tool_error(message: str, **extra: Any) -> str:
-    return json.dumps({"error": message, "success": False, **extra}, default=str)
+    return _dumps({"error": message, "success": False, **extra})
 
 
 # ---------------------------------------------------------------------------

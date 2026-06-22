@@ -39,9 +39,9 @@ class _FakeIO:
     def preprocess(self, raw, *, l_freq, h_freq):
         return {"path": "/tmp/fake_filt.fif", "filtered": [l_freq, h_freq]}
 
-    def epoch(self, filtered, *, tmin, tmax):
+    def epoch(self, filtered, *, tmin, tmax, event_id=None):
         return {"path": "/tmp/fake_epo.fif", "n_epochs": 30,
-                "window": [tmin, tmax]}
+                "window": [tmin, tmax], "event_id": event_id}
 
     def evoked(self, epochs):
         return {"path": "/tmp/fake_ave.fif", "n_epochs": 30}
