@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.normpath(os.path.join(os.path.dirname(__file__), ".."
 
 from matilde_plugin.engine.meg_study import (  # noqa: E402
     MegIO,
+    _peak_search_bounds,
     build_steps,
 )
 from matilde_plugin.engine.pipeline import resume, run  # noqa: E402
@@ -50,6 +51,8 @@ class FakeMegIO:
         self.fail_evoked = fail_evoked
         self.calls = {"fetch": 0, "preprocess": 0, "epoch": 0, "evoked": 0,
                       "measure_peak": 0}
+        # Records the event_id the study asked epoch to filter to (None=all).
+        self.epoch_event_id = "__unset__"
 
     def fetch_sample(self, *, dataset_id, bounds):
         self.calls["fetch"] += 1
@@ -60,8 +63,9 @@ class FakeMegIO:
         self.calls["preprocess"] += 1
         return {**raw, "filtered": [l_freq, h_freq], "path": "/tmp/fake_filt.fif"}
 
-    def epoch(self, filtered, *, tmin, tmax):
+    def epoch(self, filtered, *, tmin, tmax, event_id=None):
         self.calls["epoch"] += 1
+        self.epoch_event_id = event_id
         return {**filtered, "n_epochs": self.n_epochs,
                 "window": [tmin, tmax], "path": "/tmp/fake_epo.fif"}
 
@@ -95,6 +99,63 @@ def _plan():
 def test_fakeio_satisfies_contract():
     io = FakeMegIO()
     assert isinstance(io, MegIO)
+
+
+# ---------------------------------------------------------------------------
+# Regression: the peak-search bounds must stay WITHIN the expected window.
+#
+# The original bug widened the search by +/-100 ms, so an 80-120 ms M100 window
+# became a ~-20..220 ms search that grabbed the large ~15 ms stimulus artifact
+# instead of the real ~100 ms auditory peak (reported 15 ms -> "refuted"). This
+# pure, mne-free helper is the unit that would have caught it.
+# ---------------------------------------------------------------------------
+
+def test_peak_search_bounds_stay_in_window_not_widened_by_100ms():
+    # Wide available times (e.g. -0.1 .. 0.3 s) must NOT let the search escape
+    # the expected window. For an 80-120 ms window we expect ~0.08..0.12 s,
+    # never the -0.02..0.22 s that the +/-100 ms bug produced.
+    lo, hi = _peak_search_bounds((80.0, 120.0), times_lo=-0.1, times_hi=0.3)
+    # A small symmetric margin is allowed, but nothing near +/-100 ms.
+    assert lo >= 0.06 and lo <= 0.08, lo      # not -0.02
+    assert hi >= 0.12 and hi <= 0.14, hi      # not 0.22
+    # And explicitly: the early stimulus artifact at ~15 ms is OUTSIDE the search.
+    assert lo > 0.015
+
+
+def test_peak_search_bounds_clamped_to_available_times():
+    # If the recording is shorter than the window, clamp to available samples.
+    lo, hi = _peak_search_bounds((80.0, 120.0), times_lo=0.09, times_hi=0.11)
+    assert lo == 0.09
+    assert hi == 0.11
+
+
+# ---------------------------------------------------------------------------
+# Regression: epoch must filter to the standard-tone event by default, not
+# average ALL triggers (standards + deviants + button presses), which muddied
+# the evoked average in the live run.
+# ---------------------------------------------------------------------------
+
+def test_epoch_applies_standards_event_filter_by_default(store):
+    sid = store.create_study(slug="evfilter", title="EvFilter", plan=_plan())
+    io = FakeMegIO()
+    run(store, sid, build_steps(dataset_id="bst_auditory", io=io))
+    # The study must NOT ask epoch to average every trigger. The default is the
+    # standards-only auto filter (event_id=None -> most-frequent code, resolved
+    # inside the real backend), never the "all events" sentinel that produced
+    # the muddied average behind the original mis-measurement.
+    assert io.epoch_event_id != "__unset__", "epoch was never called"
+    assert io.epoch_event_id != "all", (
+        "epoch was told to average ALL triggers -> muddied evoked average")
+    assert io.epoch_event_id is None, (
+        "default should be the auto standards filter (None), resolved in backend")
+
+
+def test_epoch_event_id_overridable_via_bounds(store):
+    sid = store.create_study(slug="evfilter2", title="EvFilter2", plan=_plan())
+    io = FakeMegIO()
+    run(store, sid, build_steps(dataset_id="bst_auditory", io=io,
+                                bounds={"event_id": 7}))
+    assert io.epoch_event_id == 7
 
 
 # ---------------------------------------------------------------------------
