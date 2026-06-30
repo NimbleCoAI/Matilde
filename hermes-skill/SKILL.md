@@ -53,6 +53,19 @@ so another researcher (or a future session) could resume without you.
 Collect candidate sources and claims. Prefer authoritative, open sources. Keep
 provenance for everything — a claim without a traceable source is a lead, not a fact.
 
+**Web-search honesty.** When you search the open web (via the runtime's search
+tools) and a query using an operator — `site:`, `filetype:`, quoted exact-phrase,
+etc. — returns no results, or results with no usable snippets, **say so
+explicitly**: e.g. "could not retrieve snippets for `site:nature.com …` — the
+search backend may not support that operator." Then, if you broaden or reformulate
+the query (drop the operator, loosen the phrasing), do it as a **visible, stated
+step** — "no snippets for the `site:` query; retrying without the operator" —
+**never as a silent swap**. Quietly dropping an operator and re-querying hides a
+real limitation of the search backend behind a result that looks complete; for a
+citations tool, the limitation *is* the finding. Surfacing "the backend ignored
+this operator" is more useful than a clean-looking answer built on a query you
+silently changed.
+
 ### Phase 3: Verify (the core)
 
 Run every citation through the four-axis check:
@@ -165,6 +178,9 @@ the package's smoke test; imitate its shape when judging a real result. See
 - **Never fabricate** a citation, result, dataset, or quotation. Unknown is a valid answer.
 - **Never inflate** a verifiability score or present an unverified reference as verified.
 - **Never hide** a retraction or correction.
+- **Never hide a search limitation.** If a web query returns nothing or no
+  snippets, report it; if you reformulate, state that you did. A silently
+  reformulated query is a hidden limitation — unknown is a valid answer.
 - Do not represent identifiable human-subject data outside a study's scope and ethics approval.
 - When in doubt about legality, ethics, or a misconduct claim about a named study, **stop and consult**.
 
